@@ -1,0 +1,227 @@
+import { useState, useCallback } from 'react'
+import pb from './pb'
+import { stampaTutto } from './stampa'
+
+export function useCassa() {
+  const [righe, setRighe] = useState([])
+  const [scontoPerc, setScontoPerc] = useState(0)
+  const [scontoEuro, setScontoEuro] = useState(0)
+  const [tavolo, setTavolo] = useState(null)
+  const [note, setNote] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const getSub = useCallback(() =>
+    righe.filter(r => !r.omaggio).reduce((s, r) => s + r.prezzo_snapshot * r.quantita, 0), [righe])
+
+  const getScontoCalcolato = useCallback(() => {
+    const sub = getSub()
+    if (scontoEuro > 0) return Math.min(scontoEuro, sub)
+    if (scontoPerc > 0) return sub * scontoPerc / 100
+    return 0
+  }, [getSub, scontoEuro, scontoPerc])
+
+  const getTotale = useCallback(() =>
+    Math.max(0, getSub() - getScontoCalcolato()), [getSub, getScontoCalcolato])
+
+  const addProdotto = useCallback((prodotto) => {
+    setRighe(prev => {
+      const idx = prev.findIndex(r => r._prodotto_id === prodotto.id && !r.omaggio)
+      if (idx >= 0) {
+        const n = [...prev]; n[idx] = { ...n[idx], quantita: n[idx].quantita + 1 }; return n
+      }
+      return [...prev, {
+        _key: Date.now() + Math.random(),
+        _prodotto_id: prodotto.id,
+        _tipo: 'prodotto',
+        _famId: prodotto.famiglia,
+        prodotto: prodotto.id,
+        menu: null,
+        nome_snapshot: prodotto.nome,
+        prezzo_snapshot: prodotto.prezzo,
+        quantita: 1,
+        unita: prodotto.unita || 'pz',
+        omaggio: false,
+        note: '',
+      }]
+    })
+  }, [])
+
+  const addMenu = useCallback((menu) => {
+    setRighe(prev => [...prev, {
+      _key: Date.now() + Math.random(),
+      _tipo: 'menu',
+      prodotto: null,
+      menu: menu.id,
+      nome_snapshot: menu.nome,
+      prezzo_snapshot: menu.prezzo,
+      quantita: 1,
+      unita: 'pz',
+      omaggio: false,
+      note: '',
+    }])
+  }, [])
+
+  const setQuantita = useCallback((key, q) => {
+    setRighe(prev => q <= 0
+      ? prev.filter(r => r._key !== key)
+      : prev.map(r => r._key === key ? { ...r, quantita: q } : r))
+  }, [])
+
+  const toggleOmaggio = useCallback((key) => {
+    setRighe(prev => prev.map(r => r._key === key ? { ...r, omaggio: !r.omaggio } : r))
+  }, [])
+
+  const rimuoviRiga = useCallback((key) => {
+    setRighe(prev => prev.filter(r => r._key !== key))
+  }, [])
+
+  const svuota = useCallback(() => {
+    setRighe([]); setScontoPerc(0); setScontoEuro(0); setTavolo(null); setNote('')
+  }, [])
+
+  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente }) => {
+    setLoading(true)
+    pb.autoCancellation(false)
+    try {
+      const totale = getTotale()
+      const sub = getSub()
+
+      // Prossimo numero scontrino
+      const ultimi = await pb.collection('scontrini').getList(1, 1, {
+        sort: '-numero', fields: 'numero'
+      }).catch(() => ({ items: [] }))
+      const nextNum = (ultimi.items[0]?.numero || 0) + 1
+
+      // Crea scontrino
+      const sc = await pb.collection('scontrini').create({
+        numero: nextNum,
+        data_ora: new Date().toISOString(),
+        operatore: utente?.id || null,
+        postazione: utente?.postazione || 'Cassa',
+        tavolo: tavolo?.id || null,
+        note,
+        totale_lordo: Math.max(0, sub || 0),
+        sconto_perc: scontoPerc || 0,
+        sconto_euro: scontoEuro || 0,
+        totale_netto: Math.max(0, totale || 0),
+        tipo_pagamento: tipoPagamento || 'contanti',
+        pagato: Math.max(0, pagato || totale || 0),
+        resto: Math.max(0, (pagato || totale || 0) - (totale || 0)),
+        stornato: false,
+      })
+
+      // Crea righe
+      const righeSalvate = await Promise.all(righe.map(r =>
+        pb.collection('righe_scontrino').create({
+          scontrino: sc.id,
+          prodotto: r.prodotto || null,
+          menu: r.menu || null,
+          nome_snapshot: r.nome_snapshot,
+          prezzo_snapshot: r.prezzo_snapshot,
+          quantita: r.quantita,
+          unita: r.unita,
+          totale_riga: r.omaggio ? 0 : r.prezzo_snapshot * r.quantita,
+          omaggio: r.omaggio,
+          note: r.note,
+          stornata: false,
+        })
+      ))
+
+      // Scala magazzino
+      await Promise.all(righe.filter(r => r.prodotto).map(async r => {
+        try {
+          const prod = await pb.collection('prodotti').getOne(r.prodotto, { expand: 'magazzino_comune' })
+          if (prod.magazzino_comune && prod.expand?.magazzino_comune) {
+            const mc = prod.expand.magazzino_comune
+            if (mc.quantita >= 0) { // -1 = infinito, non scalare
+              await pb.collection('magazzini_comuni').update(mc.id, { quantita: Math.max(0, mc.quantita - r.quantita) })
+              await pb.collection('movimenti_magazzino').create({ magazzino_comune: mc.id, tipo: 'scarico', quantita: r.quantita, note: `Scontrino #${nextNum}`, scontrino: sc.id })
+            }
+          } else {
+            if (prod.quantita >= 0) { // -1 = infinito, non scalare
+              await pb.collection('prodotti').update(r.prodotto, { quantita: Math.max(0, prod.quantita - r.quantita) })
+              await pb.collection('movimenti_magazzino').create({ prodotto: r.prodotto, tipo: 'scarico', quantita: r.quantita, note: `Scontrino #${nextNum}`, scontrino: sc.id })
+            }
+          }
+        } catch(e) { console.warn('Errore scarico:', e) }
+      }))
+
+      // Stampa unificata: scontrino + tutte le comande in una sola finestra
+      try {
+        const cfg = JSON.parse(localStorage.getItem('cassa_stampa_config') || '{}')
+        const comande = await pb.collection('comande').getFullList({ filter: 'abilitata=true', sort: 'ordine,nome' })
+        const scForPrint = { ...sc, tavolo: tavolo?.numero || null }
+
+        // Costruisci mappa righe per comanda usando le righe del carrello (hanno _famId)
+        const righePerComanda = {}
+        for (const comanda of comande) {
+          let famIds = comanda.famiglie_ids || []
+          if (typeof famIds === 'string') { try { famIds = JSON.parse(famIds) } catch { famIds = [] } }
+          // Usa righe[] del carrello che hanno _famId, ma con nome_snapshot da righeSalvate
+          const righeC = righe
+            .filter(r => famIds.includes(r._famId))
+            .map(r => ({
+              ...r,
+              totale_riga: r.omaggio ? 0 : (r.prezzo_snapshot * r.quantita)
+            }))
+          if (righeC.length > 0) righePerComanda[comanda.id] = righeC
+        }
+
+        // Una sola finestra con tutto
+        stampaTutto(scForPrint, righeSalvate, comande, righePerComanda, cfg)
+      } catch(e) { console.warn('Errore stampa:', e) }
+
+      svuota()
+      return { ok: true, numero: nextNum, id: sc.id, totale }
+    } catch(e) {
+      console.error('Errore pagamento:', e)
+      return { ok: false, error: e.message }
+    } finally {
+      setLoading(false)
+      pb.autoCancellation(true)
+    }
+  }, [righe, getTotale, getSub, getScontoCalcolato, scontoPerc, scontoEuro, tavolo, note, svuota])
+
+  const stornoScontrino = useCallback(async (scontrinoId, noteStorno = '') => {
+    try {
+      const sc = await pb.collection('scontrini').getOne(scontrinoId)
+      if (sc.stornato) throw new Error('Già stornato')
+      await pb.collection('scontrini').update(scontrinoId, {
+        stornato: true, data_storno: new Date().toISOString(), note_storno: noteStorno,
+      })
+      // Ricarica magazzino
+      const righeSc = await pb.collection('righe_scontrino').getFullList({
+        filter: `scontrino="${scontrinoId}"`, expand: 'prodotto.magazzino_comune'
+      })
+      await Promise.all(righeSc.filter(r => r.prodotto && !r.stornata).map(async r => {
+        try {
+          const prod = r.expand?.prodotto
+          if (prod?.magazzino_comune && prod.expand?.magazzino_comune) {
+            const mc = prod.expand.magazzino_comune
+            await pb.collection('magazzini_comuni').update(mc.id, { quantita: mc.quantita + r.quantita })
+          } else if (prod) {
+            await pb.collection('prodotti').update(prod.id, { quantita: prod.quantita + r.quantita })
+          }
+        } catch(e) { console.warn(e) }
+      }))
+      return { ok: true }
+    } catch(e) { return { ok: false, error: e.message } }
+  }, [])
+
+  const setNoteRiga = useCallback((key, nota) => {
+    setRighe(prev => prev.map(r => r._key === key ? { ...r, note: nota } : r))
+  }, [])
+
+  return {
+    righe, setRighe,
+    scontoPerc, setScontoPerc,
+    scontoEuro, setScontoEuro,
+    tavolo, setTavolo,
+    note, setNote,
+    loading,
+    getSub, getScontoCalcolato, getTotale,
+    addProdotto, addMenu,
+    setQuantita, toggleOmaggio, rimuoviRiga, setNoteRiga,
+    svuota, pagaeSalva, stornoScontrino,
+  }
+}
