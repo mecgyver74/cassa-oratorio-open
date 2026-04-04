@@ -1,0 +1,16 @@
+# Dati personali e database
+app/pb_data/
+cassa.config.json
+cassa.log
+backup/
+
+# Build e dipendenze
+frontend-src/node_modules/
+frontend-src/dist/
+frontend-src/.env
+frontend-dist/
+
+# Sistema
+*.tmp
+Thumbs.db
+.DS_Store
