@@ -2,7 +2,7 @@
 
 Sistema di cassa open source per oratori italiani. Gestisce vendite, magazzino, comande per cucina/bar e statistiche di incasso. Gira interamente in locale su Windows, senza cloud e senza abbonamenti.
 
-![Versione](https://img.shields.io/badge/versione-1.0.0-blue)
+![Versione](https://img.shields.io/badge/versione-1.1.0-blue)
 ![Licenza](https://img.shields.io/badge/licenza-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 
@@ -41,6 +41,27 @@ Sistema di cassa open source per oratori italiani. Gestisce vendite, magazzino, 
 1. Avvia `AVVIA_CASSA.bat` come amministratore (apre la porta firewall)
 2. Apri la cassa usando l'IP di rete del PC (es. `http://192.168.1.15:8090`)
 3. Nella pagina Comande premi 📱 per il QR code
+
+## Disclaimer
+
+Questo software è fornito gratuitamente senza alcuna garanzia. Gli autori non sono responsabili per eventuali errori di cassa, perdita di dati o altri danni derivanti dall'utilizzo del programma. Si consiglia sempre di eseguire backup regolari dei dati.
+
+## Changelog
+
+### v1.1.0
+- Spunte per singole righe nelle comande (preparazione progressiva)
+- Preferenze comande persistenti (filtro, ordine, vista)
+- Protezione eliminazione prodotti già venduti
+- Scorta infinita per i prodotti (-1)
+- Stampa unificata scontrino + comande in una sola finestra
+- Fix scontrini con totale zero (omaggi e sconti 100%)
+- Fix magazzino con scorta infinita non scala
+- Ruoli utente aggiornati (barista, cuoco, cameriere)
+- Installer grafico migliorato
+- Fix vari stabilità
+
+### v1.0.0
+- Prima release pubblica stabile
 
 ## Licenza
 
