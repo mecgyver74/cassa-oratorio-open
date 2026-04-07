@@ -63,7 +63,26 @@ function TabProdotti({ toast }) {
   }
 
   const elimina = async (id) => {
-    if (!confirm('Eliminare?')) return
+    if (!confirm('Eliminare questo prodotto dal listino?')) return
+    // Verifica se il prodotto è stato venduto
+    try {
+      pb.autoCancellation(false)
+      const filtro = encodeURIComponent(`(prodotto='${id}')`)
+      const url = `${pb.baseUrl}/api/collections/righe_scontrino/records?filter=${filtro}&perPage=1`
+      const res = await fetch(url, {
+        headers: pb.authStore.token ? { Authorization: `Bearer ${pb.authStore.token}` } : {}
+      })
+      const data = await res.json()
+      pb.autoCancellation(true)
+      if (data.totalItems > 0) {
+        toast(`Impossibile eliminare: questo prodotto è presente in ${data.totalItems} riga/e di scontrino. Disattivalo invece di eliminarlo.`, 'r')
+        return
+      }
+    } catch(e) {
+      pb.autoCancellation(true)
+      // Se non riesci a verificare, procedi con conferma aggiuntiva
+      if (!confirm('Impossibile verificare se il prodotto è stato venduto. Eliminare comunque?')) return
+    }
     await pb.collection('prodotti').delete(id).catch(e => toast(e.message,'r'))
     carica(); setSel(null)
   }
@@ -386,6 +405,8 @@ function TabUtenti({ toast }) {
   const [form, setForm] = useState({})
   const carica = useCallback(async () => { setLista(await pb.collection('utenti').getFullList({sort:'nome'})) }, [])
   useEffect(() => { carica() }, [carica])
+  const [ruoliDisponibili, setRuoliDisponibili] = useState(['admin','cassiere','barista','cuoco','cameriere'])
+
   const selItem = u => { setSel(u.id); setForm({nome:u.nome,postazione:u.postazione||'',ruolo:u.ruolo||'cassiere',pin:u.pin||'',attivo:u.attivo}) }
   const salva = async () => {
     try {
@@ -417,8 +438,9 @@ function TabUtenti({ toast }) {
             <div className="fg-row">
               <div className="fg"><label>Ruolo</label>
                 <select value={form.ruolo||'cassiere'} onChange={e=>setForm(f=>({...f,ruolo:e.target.value}))}>
-                  <option value="cassiere">Cassiere</option>
-                  <option value="admin">Admin</option>
+                  {ruoliDisponibili.map(r => (
+                    <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+                  ))}
                 </select>
               </div>
               <div className="fg"><label>PIN</label><input type="password" maxLength={6} value={form.pin||''} onChange={e=>setForm(f=>({...f,pin:e.target.value}))}/></div>

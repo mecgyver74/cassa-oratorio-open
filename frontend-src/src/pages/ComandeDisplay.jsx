@@ -1,13 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import pb from '../lib/pb'
 
-// ── QR Code modale ────────────────────────────────────────────
+// ── QR Modal ─────────────────────────────────────────────────
 function QrModal({ onClose }) {
-  // Usa sempre la porta 8090 e l'hostname corrente
-  // Se siamo su 127.0.0.1 il QR non è utile — mostra avviso
-  const hostname = window.location.hostname
-  const url = `http://${hostname}:8090`
-  const isLocalhost = hostname === '127.0.0.1' || hostname === 'localhost'
+  const url = `http://${window.location.hostname}:8090`
+  const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.7)', display:'flex',
@@ -15,13 +12,13 @@ function QrModal({ onClose }) {
       onClick={e => e.target===e.currentTarget && onClose()}>
       <div style={{ background:'#1e293b', borderRadius:16, padding:28, textAlign:'center',
         border:'1px solid #334155', maxWidth:300 }}>
-        <div style={{ fontFamily:'Barlow Condensed', fontWeight:900, fontSize:18,
-          color:'#f59e0b', marginBottom:8 }}>Accesso da telefono</div>
+        <div style={{ fontFamily:'Barlow Condensed', fontWeight:900, fontSize:18, color:'#f59e0b', marginBottom:8 }}>
+          Accesso da telefono
+        </div>
         {isLocalhost && (
           <div style={{ background:'#450a0a', border:'1px solid #dc2626', borderRadius:6,
             padding:'6px 10px', marginBottom:10, fontSize:11, color:'#f87171' }}>
-            Stai aprendo la cassa da localhost — il QR non funzionerà da altri dispositivi.<br/>
-            Apri la cassa usando l'IP di rete (es. http://192.168.x.x:8090).
+            Apri la cassa usando l'IP di rete (es. http://192.168.x.x:8090) per un QR funzionante.
           </div>
         )}
         <div style={{ fontSize:12, color:'#64748b', marginBottom:14, lineHeight:1.5 }}>
@@ -30,12 +27,9 @@ function QrModal({ onClose }) {
         <img src={qrSrc} alt="QR" style={{ width:220, height:220, borderRadius:8,
           border:'3px solid #334155', display:'block', margin:'0 auto' }} />
         <div style={{ marginTop:12, background:'#0f172a', borderRadius:8, padding:'6px 10px',
-          fontSize:12, fontFamily:'monospace', color:'#94a3b8', wordBreak:'break-all' }}>
-          {url}
-        </div>
-        <button onClick={onClose}
-          style={{ marginTop:14, padding:'7px 24px', background:'#334155', border:'none',
-            borderRadius:8, color:'#94a3b8', cursor:'pointer', fontWeight:600 }}>
+          fontSize:12, fontFamily:'monospace', color:'#94a3b8', wordBreak:'break-all' }}>{url}</div>
+        <button onClick={onClose} style={{ marginTop:14, padding:'7px 24px', background:'#334155',
+          border:'none', borderRadius:8, color:'#94a3b8', cursor:'pointer', fontWeight:600 }}>
           Chiudi
         </button>
       </div>
@@ -45,28 +39,54 @@ function QrModal({ onClose }) {
 
 // ── Componente principale ─────────────────────────────────────
 export default function ComandeDisplay() {
-  const [comande, setComande]         = useState([])
-  const [scontrini, setScontrini]     = useState([])
-  const [evaseDb, setEvaseDb]         = useState({})   // { "scId_comId": record }
-  const [filtroComande, setFiltroComande] = useState(new Set())
-  const [loading, setLoading]         = useState(true)
+  const [comande, setComande]     = useState([])
+  const [scontrini, setScontrini] = useState([])
+  const [evaseDb, setEvaseDb]     = useState({})
+  const [pronte, setPronte]       = useState({}) // { "rigaId_comandaId": record }
+  const [loading, setLoading]     = useState(true)
   const [ultimoAggiorn, setUltimoAggiorn] = useState(null)
-  const [ordineInvertito, setOrdineInvertito] = useState(false)
-  const [vista, setVista]             = useState('comande') // 'comande' | 'riepilogo'
-  const [qrOpen, setQrOpen]           = useState(false)
+  const [qrOpen, setQrOpen]       = useState(false)
+  const [dbPronteOk, setDbPronteOk] = useState(true)
 
-  // ── Caricamento dati ────────────────────────────────────────
+  // Preferenze persistenti in localStorage
+  const [filtroComande, setFiltroComande] = useState(() => {
+    try {
+      const saved = localStorage.getItem('comande_filtro')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch { return new Set() }
+  })
+  const [ordineInvertito, setOrdineInvertito] = useState(() => {
+    return localStorage.getItem('comande_ordine') === '1'
+  })
+  const [vista, setVista] = useState(() => {
+    return localStorage.getItem('comande_vista') || 'comande'
+  })
+
+  // Salva preferenze quando cambiano
+  useEffect(() => {
+    localStorage.setItem('comande_filtro', JSON.stringify([...filtroComande]))
+  }, [filtroComande])
+  useEffect(() => {
+    localStorage.setItem('comande_ordine', ordineInvertito ? '1' : '0')
+  }, [ordineInvertito])
+  useEffect(() => {
+    localStorage.setItem('comande_vista', vista)
+  }, [vista])
+
+  // ── Caricamento ──────────────────────────────────────────────
   const carica = useCallback(async () => {
     try {
       pb.autoCancellation(false)
 
-      const [sc, com, evaseList] = await Promise.all([
-        pb.collection('scontrini').getFullList({
-          filter: `stornato=false`, sort: '-data_ora'
-        }),
+      const [sc, com, evaseList, pronteList] = await Promise.all([
+        pb.collection('scontrini').getFullList({ filter: `stornato=false`, sort: '-data_ora' }),
         pb.collection('comande').getFullList({ sort: 'ordine,nome', filter: 'abilitata=true' }),
         pb.collection('comande_evase').getFullList().catch(() => []),
+        pb.collection('righe_pronte').getFullList().catch(() => null),
       ])
+
+      if (pronteList === null) setDbPronteOk(false)
+      else setDbPronteOk(true)
 
       let tutteLeRighe = []
       if (sc.length > 0) {
@@ -82,13 +102,16 @@ export default function ComandeDisplay() {
         ...s, righe: tutteLeRighe.filter(r => r.scontrino === s.id)
       }))
 
-      // Mappa evase: "scId_comId" -> record
       const evMap = {}
       evaseList.forEach(e => { evMap[`${e.scontrino_id}_${e.comanda_id}`] = e })
+
+      const prMap = {}
+      if (pronteList) pronteList.forEach(p => { prMap[`${p.riga_id}_${p.comanda_id}`] = p })
 
       setComande(com)
       setScontrini(scConRighe)
       setEvaseDb(evMap)
+      setPronte(prMap)
       setUltimoAggiorn(new Date())
       setLoading(false)
     } catch(e) {
@@ -101,71 +124,72 @@ export default function ComandeDisplay() {
   useEffect(() => {
     carica()
     const interval = setInterval(carica, 8000)
-    // Realtime su scontrini E su comande_evase
-    const subs = []
-    pb.collection('scontrini').subscribe('*', () => carica())
-      .then(u => subs.push(u)).catch(() => {})
-    pb.collection('comande_evase').subscribe('*', () => carica())
-      .then(u => subs.push(u)).catch(() => {})
+    let subs = []
+    pb.collection('scontrini').subscribe('*', () => carica()).then(u => subs.push(u)).catch(() => {})
+    pb.collection('comande_evase').subscribe('*', () => carica()).then(u => subs.push(u)).catch(() => {})
+    if (dbPronteOk) {
+      pb.collection('righe_pronte').subscribe('*', () => carica()).then(u => subs.push(u)).catch(() => {})
+    }
     return () => {
       clearInterval(interval)
-      subs.forEach(u => u())
+      subs.forEach(u => u && u())
       pb.collection('scontrini').unsubscribe('*').catch(() => {})
       pb.collection('comande_evase').unsubscribe('*').catch(() => {})
+      pb.collection('righe_pronte').unsubscribe('*').catch(() => {})
     }
-  }, [carica])
+  }, [carica, dbPronteOk])
 
-  // ── Toggle evasa: DB con fallback localStorage ───────────────
-  const [dbDisponibile, setDbDisponibile] = useState(true)
-  const [erroreEvasa, setErroreEvasa] = useState(null)
-  const [evaseLocal, setEvaseLocal] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('comande_evase') || '{}') } catch { return {} }
-  })
-
+  // ── Toggle evasa ─────────────────────────────────────────────
   const toggleEvasa = async (scontrinoId, comandaId) => {
     const key = `${scontrinoId}_${comandaId}`
-
-    if (dbDisponibile) {
-      const existing = evaseDb[key]
-      try {
-        pb.autoCancellation(false)
-        if (existing) {
-          await pb.collection('comande_evase').delete(existing.id)
-          setEvaseDb(prev => { const n={...prev}; delete n[key]; return n })
-        } else {
-          const rec = await pb.collection('comande_evase').create({
-            scontrino_id: scontrinoId,
-            comanda_id: comandaId,
-            evasa_at: new Date().toISOString()
-          })
-          setEvaseDb(prev => ({ ...prev, [key]: rec }))
-        }
-        pb.autoCancellation(true)
-        return
-      } catch(e) {
-        pb.autoCancellation(true)
-        console.warn('comande_evase non disponibile, uso localStorage:', e.message)
-        setErroreEvasa('DB: ' + e.message)
-        setDbDisponibile(false)
+    const existing = evaseDb[key]
+    try {
+      pb.autoCancellation(false)
+      if (existing) {
+        await pb.collection('comande_evase').delete(existing.id)
+        setEvaseDb(prev => { const n={...prev}; delete n[key]; return n })
+      } else {
+        const rec = await pb.collection('comande_evase').create({
+          scontrino_id: scontrinoId, comanda_id: comandaId,
+          evasa_at: new Date().toISOString()
+        })
+        setEvaseDb(prev => ({ ...prev, [key]: rec }))
       }
+      pb.autoCancellation(true)
+    } catch(e) {
+      pb.autoCancellation(true)
+      console.error('Errore toggle evasa:', e)
     }
-
-    // Fallback localStorage
-    setEvaseLocal(prev => {
-      const n = { ...prev }
-      if (n[key]) delete n[key]
-      else n[key] = new Date().toISOString()
-      localStorage.setItem('comande_evase', JSON.stringify(n))
-      return n
-    })
   }
 
-  const isEvasa = (scId, comId) => {
-    const key = `${scId}_${comId}`
-    return dbDisponibile ? !!evaseDb[key] : !!evaseLocal[key]
+  // ── Toggle riga pronta ────────────────────────────────────────
+  const togglePronta = async (rigaId, comandaId) => {
+    if (!dbPronteOk) return
+    const key = `${rigaId}_${comandaId}`
+    const existing = pronte[key]
+    try {
+      pb.autoCancellation(false)
+      if (existing) {
+        await pb.collection('righe_pronte').delete(existing.id)
+        setPronte(prev => { const n={...prev}; delete n[key]; return n })
+      } else {
+        const rec = await pb.collection('righe_pronte').create({
+          riga_id: rigaId, comanda_id: comandaId,
+          pronta_at: new Date().toISOString()
+        })
+        setPronte(prev => ({ ...prev, [key]: rec }))
+      }
+      pb.autoCancellation(true)
+    } catch(e) {
+      pb.autoCancellation(true)
+      console.error('Errore toggle pronta:', e)
+    }
   }
 
-  // ── Filtri e ordinamento ─────────────────────────────────────
+  const isEvasa = (scId, comId) => !!evaseDb[`${scId}_${comId}`]
+  const isPronta = (rigaId, comId) => !!pronte[`${rigaId}_${comId}`]
+
+  // ── Filtri ───────────────────────────────────────────────────
   const getRighePerComanda = (scontrino, comanda) => {
     let famIds = comanda.famiglie_ids || []
     if (typeof famIds === 'string') { try { famIds = JSON.parse(famIds) } catch { famIds = [] } }
@@ -196,7 +220,7 @@ export default function ComandeDisplay() {
   let completate = items.filter(i => i.evasa)
   if (ordineInvertito) { pendenti = [...pendenti].reverse(); completate = [...completate].reverse() }
 
-  // ── Riepilogo prodotti da preparare (solo pendenti) ──────────
+  // Riepilogo prodotti pendenti
   const riepilogo = {}
   pendenti.forEach(({ righe }) => {
     righe.forEach(r => {
@@ -208,26 +232,17 @@ export default function ComandeDisplay() {
   })
   const riepilogoList = Object.values(riepilogo).sort((a,b) => b.qta - a.qta)
 
-  // ── Stili comuni ─────────────────────────────────────────────
-  const S = {
-    root: { background:'#1a1a2e', height:'100%', display:'flex', flexDirection:'column',
-      fontFamily:'Barlow, sans-serif', color:'#e2e8f0', overflow:'hidden' },
-    header: { background:'#16213e', padding:'8px 12px', display:'flex', alignItems:'center',
-      gap:8, flexWrap:'wrap', boxShadow:'0 2px 8px rgba(0,0,0,.3)', flexShrink:0 },
-    scroll: { flex:1, overflowY:'auto', padding:'10px 12px' },
-  }
-
   return (
-    <div style={S.root}>
+    <div style={{ background:'#1a1a2e', height:'100%', display:'flex', flexDirection:'column',
+      fontFamily:'Barlow, sans-serif', color:'#e2e8f0', overflow:'hidden' }}>
       {qrOpen && <QrModal onClose={() => setQrOpen(false)} />}
 
       {/* Header */}
-      <div style={S.header}>
+      <div style={{ background:'#16213e', padding:'8px 12px', display:'flex', alignItems:'center',
+        gap:8, flexWrap:'wrap', boxShadow:'0 2px 8px rgba(0,0,0,.3)', flexShrink:0 }}>
         <div style={{ fontFamily:'Barlow Condensed', fontWeight:900, fontSize:18, color:'#f59e0b' }}>
           COMANDE LIVE
         </div>
-
-        {/* Contatori */}
         <div style={{ background:'#dc2626', borderRadius:6, padding:'2px 10px',
           fontFamily:'Barlow Condensed', fontWeight:800, fontSize:14 }}>
           {pendenti.length} in attesa
@@ -236,7 +251,6 @@ export default function ComandeDisplay() {
           fontFamily:'Barlow Condensed', fontWeight:800, fontSize:14 }}>
           {completate.length} evase
         </div>
-
         <div style={{ flex:1 }} />
 
         {/* Filtro comande */}
@@ -263,7 +277,7 @@ export default function ComandeDisplay() {
           })}
         </div>
 
-        {/* Vista / Ordine / Aggiorna / QR */}
+        {/* Controlli */}
         <div style={{ display:'flex', gap:4 }}>
           <button onClick={() => setVista(v => v==='comande' ? 'riepilogo' : 'comande')}
             style={{ padding:'4px 10px', background: vista==='riepilogo' ? '#f59e0b' : '#334155',
@@ -274,34 +288,23 @@ export default function ComandeDisplay() {
           <button onClick={() => setOrdineInvertito(o => !o)}
             style={{ padding:'4px 10px', background: ordineInvertito ? '#475569' : '#334155',
               border:'none', borderRadius:6, color:'#94a3b8', cursor:'pointer', fontSize:13 }}
-            title={ordineInvertito ? 'Ordine: più recenti prima' : 'Ordine: più vecchi prima'}>
+            title={ordineInvertito ? 'Dal piu recente' : 'Dal piu vecchio'}>
             {ordineInvertito ? '↑' : '↓'}
           </button>
           <button onClick={carica}
             style={{ padding:'4px 10px', background:'#334155', border:'none',
               borderRadius:6, color:'#94a3b8', cursor:'pointer', fontSize:14 }}>↻</button>
+          <button onClick={() => {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
+            else document.exitFullscreen().catch(() => {})
+          }} style={{ padding:'4px 10px', background:'#334155', border:'none',
+            borderRadius:6, color:'#94a3b8', cursor:'pointer', fontSize:14 }}
+            title="Schermo intero">⛶</button>
           <button onClick={() => setQrOpen(true)}
             style={{ padding:'4px 10px', background:'#334155', border:'none',
               borderRadius:6, color:'#94a3b8', cursor:'pointer', fontSize:14 }}
-            title="QR Code accesso da telefono">📱</button>
-          <button onClick={() => {
-            if (!document.fullscreenElement) {
-              document.documentElement.requestFullscreen().catch(() => {})
-            } else {
-              document.exitFullscreen().catch(() => {})
-            }
-          }}
-            style={{ padding:'4px 10px', background:'#334155', border:'none',
-              borderRadius:6, color:'#94a3b8', cursor:'pointer', fontSize:14 }}
-            title="Schermo intero">⛶</button>
+            title="QR Code">📱</button>
         </div>
-
-        {erroreEvasa && (
-          <span style={{ fontSize:11, color:'#f87171', background:'#450a0a',
-            padding:'2px 8px', borderRadius:4 }}>
-            ⚠ {erroreEvasa}
-          </span>
-        )}
         {ultimoAggiorn && (
           <span style={{ fontSize:10, color:'#475569' }}>
             {ultimoAggiorn.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
@@ -309,29 +312,25 @@ export default function ComandeDisplay() {
         )}
       </div>
 
-      {/* ── VISTA RIEPILOGO ───────────────────────────────────── */}
+      {/* ── Vista Riepilogo ───────────────────────────────── */}
       {vista === 'riepilogo' && (
-        <div style={S.scroll}>
-          <div style={{ marginBottom:12, fontSize:12, color:'#64748b' }}>
-            Prodotti ancora da preparare (comande non evase) — si aggiorna automaticamente
+        <div style={{ flex:1, overflowY:'auto', padding:'10px 12px' }}>
+          <div style={{ marginBottom:10, fontSize:12, color:'#64748b' }}>
+            Prodotti da preparare (comande non evase)
           </div>
           {riepilogoList.length === 0 && (
             <div style={{ textAlign:'center', padding:40, color:'#475569', fontSize:16 }}>
               Nessun prodotto in attesa
             </div>
           )}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px,1fr))', gap:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:10 }}>
             {riepilogoList.map(p => (
               <div key={p.nome} style={{ background:'#1e293b', borderRadius:10,
                 padding:'12px 16px', border:'1px solid #334155' }}>
                 <div style={{ fontFamily:'Barlow Condensed', fontWeight:700, fontSize:16,
-                  color:'#e2e8f0', lineHeight:1.2, marginBottom:6 }}>
-                  {p.nome}
-                </div>
-                <div style={{ fontFamily:'Barlow Condensed', fontWeight:900, fontSize:36,
-                  color:'#f59e0b', lineHeight:1 }}>
-                  {p.qta}×
-                </div>
+                  color:'#e2e8f0', marginBottom:6 }}>{p.nome}</div>
+                <div style={{ fontFamily:'Barlow Condensed', fontWeight:900,
+                  fontSize:36, color:'#f59e0b', lineHeight:1 }}>{p.qta}×</div>
                 {p.note.length > 0 && (
                   <div style={{ marginTop:6, fontSize:11, color:'#64748b', fontStyle:'italic' }}>
                     {[...new Set(p.note)].join(' · ')}
@@ -343,67 +342,100 @@ export default function ComandeDisplay() {
         </div>
       )}
 
-      {/* ── VISTA COMANDE ─────────────────────────────────────── */}
+      {/* ── Vista Comande ─────────────────────────────────── */}
       {vista === 'comande' && (
-        <div style={S.scroll}>
-          {loading && (
-            <div style={{ textAlign:'center', padding:40, color:'#64748b' }}>Caricamento...</div>
-          )}
+        <div style={{ flex:1, overflowY:'auto', padding:'10px 12px' }}>
+          {loading && <div style={{ textAlign:'center', padding:40, color:'#64748b' }}>Caricamento...</div>}
           {pendenti.length === 0 && !loading && (
             <div style={{ textAlign:'center', padding:40, color:'#475569', fontSize:16 }}>
               Nessuna comanda in attesa
             </div>
           )}
 
-          {/* Pendenti */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',
             gap:10, marginBottom: completate.length ? 16 : 0 }}>
-            {pendenti.map(({ scontrino:sc, comanda:com, righe }) => (
-              <div key={`${sc.id}_${com.id}`}
-                style={{ background:'#1e293b', borderRadius:10, overflow:'hidden',
-                  border:'2px solid #dc2626', boxShadow:'0 3px 12px rgba(220,38,38,.2)' }}>
-                <div style={{ background:com.colore||'#dc2626', padding:'6px 12px',
-                  display:'flex', alignItems:'center', gap:8 }}>
-                  <div style={{ fontFamily:'Barlow Condensed', fontWeight:900,
-                    fontSize:16, color:'#fff', flex:1 }}>{com.nome.toUpperCase()}</div>
-                  <div style={{ fontFamily:'Barlow Condensed', fontWeight:800,
-                    fontSize:20, color:'#fff' }}>#{String(sc.numero).padStart(4,'0')}</div>
-                </div>
-                <div style={{ padding:'4px 12px', background:'#0f172a', display:'flex',
-                  justifyContent:'space-between', fontSize:11, color:'#64748b' }}>
-                  <span>{new Date(sc.data_ora).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</span>
-                  {sc.tavolo && <span style={{ color:'#f59e0b', fontWeight:700 }}>T.{sc.tavolo}</span>}
-                  {sc.note && <span style={{ fontStyle:'italic', maxWidth:120, overflow:'hidden',
-                    textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sc.note}</span>}
-                </div>
-                <div style={{ padding:'6px 12px' }}>
-                  {righe.map((r,i) => (
-                    <div key={i} style={{ padding:'4px 0',
-                      borderBottom: i<righe.length-1 ? '1px solid #334155' : 'none',
-                      display:'flex', gap:10, alignItems:'baseline' }}>
-                      <span style={{ fontFamily:'Barlow Condensed', fontWeight:900,
-                        fontSize:22, color:'#f59e0b', minWidth:30, textAlign:'right' }}>
-                        {r.quantita}×
+            {pendenti.map(({ scontrino:sc, comanda:com, righe }) => {
+              const tuttePronte = righe.every(r => isPronta(r.id, com.id))
+              return (
+                <div key={`${sc.id}_${com.id}`}
+                  style={{ background:'#1e293b', borderRadius:10, overflow:'hidden',
+                    border: `2px solid ${tuttePronte ? '#16a34a' : '#dc2626'}`,
+                    boxShadow: tuttePronte
+                      ? '0 3px 12px rgba(22,163,74,.3)'
+                      : '0 3px 12px rgba(220,38,38,.2)' }}>
+                  <div style={{ background:com.colore||'#dc2626', padding:'6px 12px',
+                    display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ fontFamily:'Barlow Condensed', fontWeight:900,
+                      fontSize:16, color:'#fff', flex:1 }}>{com.nome.toUpperCase()}</div>
+                    <div style={{ fontFamily:'Barlow Condensed', fontWeight:800,
+                      fontSize:20, color:'#fff' }}>#{String(sc.numero).padStart(4,'0')}</div>
+                  </div>
+                  <div style={{ padding:'4px 12px', background: sc.asporto ? '#78350f' : '#0f172a',
+                    display:'flex', justifyContent:'space-between', fontSize:11, color:'#64748b',
+                    alignItems:'center', gap:6 }}>
+                    <span>{new Date(sc.data_ora).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</span>
+                    {sc.asporto && (
+                      <span style={{ color:'#f59e0b', fontWeight:900, fontSize:13,
+                        background:'#92400e', padding:'1px 8px', borderRadius:4 }}>
+                        🥡 ASPORTO
                       </span>
-                      <div>
-                        <div style={{ fontFamily:'Barlow Condensed', fontWeight:700,
-                          fontSize:16, color:'#e2e8f0' }}>{r.nome_snapshot}</div>
-                        {r.note && <div style={{ fontSize:11, color:'#94a3b8',
-                          fontStyle:'italic' }}>{r.note}</div>}
-                      </div>
+                    )}
+                    {sc.tavolo && !sc.asporto && (
+                      <span style={{ color:'#f59e0b', fontWeight:700 }}>🪑 T.{sc.tavolo}</span>
+                    )}
+                    {sc.note && <span style={{ fontStyle:'italic', color:'#94a3b8' }}>{sc.note}</span>}
+                  </div>
+
+                  {/* Righe con spunte */}
+                  <div style={{ padding:'6px 12px' }}>
+                    {righe.map((r, i) => {
+                      const pronta = isPronta(r.id, com.id)
+                      return (
+                        <div key={i}
+                          onClick={() => togglePronta(r.id, com.id)}
+                          style={{ padding:'5px 0',
+                            borderBottom: i < righe.length-1 ? '1px solid #334155' : 'none',
+                            display:'flex', gap:10, alignItems:'baseline',
+                            cursor:'pointer', opacity: pronta ? 0.5 : 1,
+                            textDecoration: pronta ? 'line-through' : 'none',
+                            transition:'opacity .2s' }}>
+                          <span style={{ fontFamily:'Barlow Condensed', fontWeight:900,
+                            fontSize:22, color: pronta ? '#16a34a' : '#f59e0b',
+                            minWidth:30, textAlign:'right', flexShrink:0 }}>
+                            {pronta ? '✓' : `${r.quantita}×`}
+                          </span>
+                          <div>
+                            <div style={{ fontFamily:'Barlow Condensed', fontWeight:700,
+                              fontSize:16, color: pronta ? '#64748b' : '#e2e8f0' }}>
+                              {r.nome_snapshot}
+                            </div>
+                            {r.note && <div style={{ fontSize:11, color:'#94a3b8', fontStyle:'italic' }}>{r.note}</div>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Footer */}
+                  {tuttePronte && (
+                    <div style={{ padding:'4px 12px', background:'#052e16',
+                      fontSize:12, color:'#4ade80', textAlign:'center', fontWeight:700 }}>
+                      Tutti pronti — segna come evasa
                     </div>
-                  ))}
+                  )}
+                  <div style={{ padding:'6px 12px 12px' }}>
+                    <button onClick={() => toggleEvasa(sc.id, com.id)}
+                      style={{ width:'100%', padding:10,
+                        background: tuttePronte ? '#16a34a' : '#1e3a5f',
+                        color:'#fff', border:'none', borderRadius:8,
+                        fontFamily:'Barlow Condensed', fontWeight:800, fontSize:16,
+                        cursor:'pointer', transition:'background .2s' }}>
+                      {tuttePronte ? '✓ EVASA' : 'Segna come evasa'}
+                    </button>
+                  </div>
                 </div>
-                <div style={{ padding:'6px 12px 12px' }}>
-                  <button onClick={() => toggleEvasa(sc.id, com.id)}
-                    style={{ width:'100%', padding:10, background:'#16a34a', color:'#fff',
-                      border:'none', borderRadius:8, fontFamily:'Barlow Condensed',
-                      fontWeight:800, fontSize:16, cursor:'pointer' }}>
-                    ✓ EVASA
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Evase */}
@@ -413,8 +445,7 @@ export default function ComandeDisplay() {
                 textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>
                 — Evase ({completate.length}) —
               </div>
-              <div style={{ display:'grid',
-                gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:6 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:6 }}>
                 {completate.map(({ scontrino:sc, comanda:com, righe }) => (
                   <div key={`${sc.id}_${com.id}_done`}
                     style={{ background:'#0f172a', borderRadius:8, overflow:'hidden',
@@ -432,9 +463,7 @@ export default function ComandeDisplay() {
                           cursor:'pointer', fontSize:11 }}>riapri</button>
                     </div>
                     <div style={{ padding:'3px 12px 6px', fontSize:12, color:'#475569' }}>
-                      {righe.map((r,i) => (
-                        <span key={i}>{i>0?', ':''}{r.quantita}× {r.nome_snapshot}</span>
-                      ))}
+                      {righe.map((r,i) => <span key={i}>{i>0?', ':''}{r.quantita}× {r.nome_snapshot}</span>)}
                     </div>
                   </div>
                 ))}

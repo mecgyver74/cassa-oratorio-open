@@ -1,514 +1,466 @@
-# CASSA ORATORIO - Installer v1.0
-$ErrorActionPreference = "SilentlyContinue"
+# CASSA ORATORIO - Installer grafico
+# Richiede PowerShell 5+ e .NET (incluso in Windows 10/11)
+$ErrorActionPreference = "Continue"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# Colori come oggetti statici
-$cBlu    = [System.Drawing.Color]::FromArgb(26, 82, 118)
-$cVerde  = [System.Drawing.Color]::FromArgb(22, 163, 74)
-$cBianco = [System.Drawing.Color]::White
-$cSfondo = [System.Drawing.Color]::FromArgb(245, 247, 250)
-$cTesto  = [System.Drawing.Color]::FromArgb(30, 30, 30)
-$cGrigio = [System.Drawing.Color]::FromArgb(107, 114, 128)
-$cBordo  = [System.Drawing.Color]::FromArgb(209, 213, 219)
-
-function NuovaFinestra([string]$titolo, [int]$w, [int]$h) {
+# ── Funzioni UI ───────────────────────────────────────────────
+function MakeForm($title, $w, $h) {
     $f = New-Object System.Windows.Forms.Form
-    $f.Text = $titolo
+    $f.Text = $title
     $f.Size = New-Object System.Drawing.Size($w, $h)
     $f.StartPosition = "CenterScreen"
     $f.FormBorderStyle = "FixedDialog"
     $f.MaximizeBox = $false
-    $f.BackColor = $cSfondo
-    $f.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    $f.BackColor = [System.Drawing.Color]::FromArgb(240, 242, 245)
+    $f.Font = New-Object System.Drawing.Font("Segoe UI", 9)
     return $f
 }
 
-function AggiungiHeader([System.Windows.Forms.Form]$form, [string]$titolo, [string]$sub) {
-    $p = New-Object System.Windows.Forms.Panel
-    $p.Dock = "Top"; $p.Height = 80
-    $p.BackColor = $cBlu
-    $form.Controls.Add($p)
-
-    $t = New-Object System.Windows.Forms.Label
-    $t.Text = $titolo; $t.Left = 24; $t.Top = 14; $t.Width = 550; $t.Height = 30
-    $t.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
-    $t.ForeColor = $cBianco; $t.BackColor = [System.Drawing.Color]::Transparent
-    $p.Controls.Add($t)
-
-    $s = New-Object System.Windows.Forms.Label
-    $s.Text = $sub; $s.Left = 24; $s.Top = 50; $s.Width = 550; $s.Height = 22
-    $s.ForeColor = [System.Drawing.Color]::FromArgb(180, 210, 240)
-    $s.BackColor = [System.Drawing.Color]::Transparent
-    $p.Controls.Add($s)
-}
-
-function NuovaLabel([System.Windows.Forms.Control]$parent, [string]$testo, [int]$x, [int]$y, [int]$w, [int]$h) {
+function MakeLabel($form, $text, $x, $y, $w, $h, $bold=$false) {
     $l = New-Object System.Windows.Forms.Label
-    $l.Text = $testo; $l.Left = $x; $l.Top = $y; $l.Width = $w; $l.Height = $h
-    $l.ForeColor = $cGrigio; $l.BackColor = [System.Drawing.Color]::Transparent
-    $parent.Controls.Add($l)
-    return $l
+    $l.Text = $text; $l.Left = $x; $l.Top = $y; $l.Width = $w; $l.Height = $h
+    if ($bold) { $l.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold) }
+    $l.BackColor = [System.Drawing.Color]::Transparent
+    $form.Controls.Add($l); return $l
 }
 
-function NuovaLabelBold([System.Windows.Forms.Control]$parent, [string]$testo, [int]$x, [int]$y, [int]$w, [int]$h) {
-    $l = New-Object System.Windows.Forms.Label
-    $l.Text = $testo; $l.Left = $x; $l.Top = $y; $l.Width = $w; $l.Height = $h
-    $l.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-    $l.ForeColor = $cTesto; $l.BackColor = [System.Drawing.Color]::Transparent
-    $parent.Controls.Add($l)
-    return $l
-}
-
-function NuovoInput([System.Windows.Forms.Form]$form, [int]$x, [int]$y, [int]$w, [string]$default, [bool]$password) {
+function MakeTextBox($form, $x, $y, $w, $default="", $password=$false) {
     $t = New-Object System.Windows.Forms.TextBox
     $t.Left = $x; $t.Top = $y; $t.Width = $w; $t.Text = $default
-    $t.BorderStyle = "FixedSingle"; $t.BackColor = $cBianco
     if ($password) { $t.UseSystemPasswordChar = $true }
-    $form.Controls.Add($t)
-    return $t
+    $t.BorderStyle = "FixedSingle"
+    $form.Controls.Add($t); return $t
 }
 
-function NuovoBtnPrimario([System.Windows.Forms.Form]$form, [string]$testo, [int]$x, [int]$y, [int]$w, [int]$h) {
+function MakeButton($form, $text, $x, $y, $w, $h, $primary=$false) {
     $b = New-Object System.Windows.Forms.Button
-    $b.Text = $testo; $b.Left = $x; $b.Top = $y; $b.Width = $w; $b.Height = $h
-    $b.FlatStyle = "Flat"; $b.Cursor = "Hand"
-    $b.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-    $b.BackColor = $cBlu; $b.ForeColor = $cBianco
-    $b.FlatAppearance.BorderSize = 0
-    $form.Controls.Add($b)
-    return $b
+    $b.Text = $text; $b.Left = $x; $b.Top = $y; $b.Width = $w; $b.Height = $h
+    $b.FlatStyle = "Flat"
+    if ($primary) {
+        $b.BackColor = [System.Drawing.Color]::FromArgb(26, 82, 118)
+        $b.ForeColor = [System.Drawing.Color]::White
+        $b.FlatAppearance.BorderSize = 0
+        $b.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    }
+    $form.Controls.Add($b); return $b
 }
 
-function NuovoBtnPrimarioVerde([System.Windows.Forms.Form]$form, [string]$testo, [int]$x, [int]$y, [int]$w, [int]$h) {
-    $b = New-Object System.Windows.Forms.Button
-    $b.Text = $testo; $b.Left = $x; $b.Top = $y; $b.Width = $w; $b.Height = $h
-    $b.FlatStyle = "Flat"; $b.Cursor = "Hand"
-    $b.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-    $b.BackColor = $cVerde; $b.ForeColor = $cBianco
-    $b.FlatAppearance.BorderSize = 0
-    $form.Controls.Add($b)
-    return $b
-}
-
-function NuovoBtnSecondario([System.Windows.Forms.Form]$form, [string]$testo, [int]$x, [int]$y, [int]$w, [int]$h) {
-    $b = New-Object System.Windows.Forms.Button
-    $b.Text = $testo; $b.Left = $x; $b.Top = $y; $b.Width = $w; $b.Height = $h
-    $b.FlatStyle = "Flat"; $b.Cursor = "Hand"
-    $b.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-    $b.BackColor = [System.Drawing.Color]::FromArgb(229, 231, 235)
-    $b.ForeColor = $cTesto
-    $b.FlatAppearance.BorderColor = $cBordo
-    $form.Controls.Add($b)
-    return $b
+function MakePanel($form, $x, $y, $w, $h, $color) {
+    $p = New-Object System.Windows.Forms.Panel
+    $p.Left = $x; $p.Top = $y; $p.Width = $w; $p.Height = $h
+    $p.BackColor = $color
+    $form.Controls.Add($p); return $p
 }
 
 # ── Schermata 1: Benvenuto ────────────────────────────────────
-function S1_Benvenuto {
-    $f = NuovaFinestra "Cassa Oratorio - Installazione" 600 500
-    AggiungiHeader $f "Benvenuto in Cassa Oratorio" "Procedura guidata di installazione"
+function ShowWelcome {
+    $f = MakeForm "Cassa Oratorio - Installazione" 540 460
+    
+    # Header blu
+    $header = MakePanel $f 0 0 500 80 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = "CASSA ORATORIO"
+    $title.Left = 20; $title.Top = 20; $title.Width = 460; $title.Height = 30
+    $title.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+    $title.ForeColor = [System.Drawing.Color]::White
+    $title.BackColor = [System.Drawing.Color]::Transparent
+    $header.Controls.Add($title)
+    $sub = New-Object System.Windows.Forms.Label
+    $sub.Text = "Procedura guidata di installazione"
+    $sub.Left = 20; $sub.Top = 52; $sub.Width = 460; $sub.Height = 20
+    $sub.ForeColor = [System.Drawing.Color]::FromArgb(200, 220, 240)
+    $sub.BackColor = [System.Drawing.Color]::Transparent
+    $header.Controls.Add($sub)
 
-    $box = New-Object System.Windows.Forms.Panel
-    $box.Left = 24; $box.Top = 100; $box.Width = 552; $box.Height = 190
-    $box.BackColor = $cBianco; $box.BorderStyle = "FixedSingle"
-    $f.Controls.Add($box)
+    MakeLabel $f "Benvenuto nell'installer di Cassa Oratorio." 20 110 460 20 $true
+    MakeLabel $f "Questa procedura guidata ti aiuterà a:" 20 135 460 20
+    MakeLabel $f "  • Scegliere dove installare il programma (PC o chiavetta USB)" 20 158 460 20
+    MakeLabel $f "  • Creare l'account amministratore" 20 178 460 20
+    MakeLabel $f "  • Compilare l'interfaccia grafica" 20 198 460 20
+    MakeLabel $f "  • Creare il collegamento sul desktop" 20 218 460 20
+    MakeLabel $f "Tempo stimato: 3-5 minuti (richiede connessione internet)" 20 250 460 20
+    MakeLabel $f "Assicurati che Node.js sia installato (nodejs.org)" 20 270 460 20
+    
+    $btnNext = MakeButton $f "Inizia l'installazione →" 360 400 160 35 $true
+    $btnEsci = MakeButton $f "Esci" 20 400 80 35
 
-    $info = New-Object System.Windows.Forms.Label
-    $info.Text = "Questa procedura ti guida in pochi passi:`n`n  1.  Scegliere dove installare (PC o chiavetta USB)`n  2.  Creare l'account amministratore`n  3.  Compilare automaticamente l'interfaccia`n  4.  Creare il collegamento sul desktop`n`nTempo stimato: 3-5 minuti."
-    $info.Left = 16; $info.Top = 14; $info.Width = 520; $info.Height = 162
-    $info.ForeColor = $cTesto; $info.BackColor = $cBianco
-    $box.Controls.Add($info)
-
-    $avviso = New-Object System.Windows.Forms.Panel
-    $avviso.Left = 24; $avviso.Top = 304; $avviso.Width = 552; $avviso.Height = 50
-    $avviso.BackColor = [System.Drawing.Color]::FromArgb(255, 251, 235)
-    $avviso.BorderStyle = "FixedSingle"
-    $f.Controls.Add($avviso)
-
-    $av = New-Object System.Windows.Forms.Label
-    $av.Text = "Requisito: Node.js deve essere installato. Scaricalo da nodejs.org (LTS)."
-    $av.Left = 12; $av.Top = 10; $av.Width = 528; $av.Height = 28
-    $av.ForeColor = [System.Drawing.Color]::FromArgb(146, 64, 14)
-    $av.BackColor = [System.Drawing.Color]::Transparent
-    $avviso.Controls.Add($av)
-
-    $btnOk   = NuovoBtnPrimario   $f "Inizia l'installazione" 388 430 188 40
-    $btnEsci = NuovoBtnSecondario $f "Esci" 24 430 100 40
-
-    $script:r1 = $null
-    $btnOk.Add_Click({   $script:r1 = "next"; $f.Close() })
-    $btnEsci.Add_Click({ $script:r1 = "exit"; $f.Close() })
+    $result = $null
+    $btnNext.Add_Click({ $script:result = "next"; $f.Close() })
+    $btnEsci.Add_Click({ $script:result = "exit"; $f.Close() })
+    
     $f.ShowDialog() | Out-Null
-    return $script:r1
+    return $script:result
 }
 
-# ── Schermata 2: Posizione ────────────────────────────────────
-function S2_Posizione {
-    $f = NuovaFinestra "Cassa Oratorio - Dove installare" 600 520
-    AggiungiHeader $f "Dove vuoi installare?" "PC fisso o chiavetta USB"
+# ── Schermata 2: Posizione installazione ─────────────────────
+function ShowLocation {
+    $f = MakeForm "Cassa Oratorio - Posizione installazione" 540 500
+    
+    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $t = New-Object System.Windows.Forms.Label
+    $t.Text = "Dove vuoi installare Cassa Oratorio?"
+    $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
+    $t.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $t.ForeColor = [System.Drawing.Color]::White
+    $t.BackColor = [System.Drawing.Color]::Transparent
+    $header.Controls.Add($t)
 
-    # PC
-    $panPC = New-Object System.Windows.Forms.Panel
-    $panPC.Left = 24; $panPC.Top = 100; $panPC.Width = 552; $panPC.Height = 76
-    $panPC.BackColor = $cBianco; $panPC.BorderStyle = "FixedSingle"
-    $f.Controls.Add($panPC)
+    # Radio PC
     $rbPC = New-Object System.Windows.Forms.RadioButton
-    $rbPC.Text = "Installa su questo PC"; $rbPC.Left = 8; $rbPC.Top = 8
-    $rbPC.Width = 530; $rbPC.Height = 26; $rbPC.Checked = $true
-    $rbPC.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-    $rbPC.ForeColor = $cBlu; $rbPC.BackColor = $cBianco
-    $panPC.Controls.Add($rbPC)
-    $lPC = New-Object System.Windows.Forms.Label
-    $lPC.Text = "     Rimane su questo computer. Massime prestazioni."; $lPC.Left = 8; $lPC.Top = 36
-    $lPC.Width = 530; $lPC.Height = 28; $lPC.ForeColor = $cGrigio; $lPC.BackColor = $cBianco
-    $panPC.Controls.Add($lPC)
+    $rbPC.Text = "Installa su questo PC"
+    $rbPC.Left = 20; $rbPC.Top = 90; $rbPC.Width = 300; $rbPC.Height = 20
+    $rbPC.Checked = $true
+    $rbPC.BackColor = [System.Drawing.Color]::Transparent
+    $f.Controls.Add($rbPC)
+    MakeLabel $f "Il programma resterà su questo computer." 40 112 420 18
 
-    # USB
-    $panUSB = New-Object System.Windows.Forms.Panel
-    $panUSB.Left = 24; $panUSB.Top = 188; $panUSB.Width = 552; $panUSB.Height = 76
-    $panUSB.BackColor = $cBianco; $panUSB.BorderStyle = "FixedSingle"
-    $f.Controls.Add($panUSB)
+    # Radio USB
     $rbUSB = New-Object System.Windows.Forms.RadioButton
-    $rbUSB.Text = "Chiavetta USB (portabile)"; $rbUSB.Left = 8; $rbUSB.Top = 8
-    $rbUSB.Width = 530; $rbUSB.Height = 26
-    $rbUSB.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-    $rbUSB.ForeColor = $cBlu; $rbUSB.BackColor = $cBianco
-    $panUSB.Controls.Add($rbUSB)
-    $lUSB = New-Object System.Windows.Forms.Label
-    $lUSB.Text = "     Portabile su qualsiasi PC Windows. Usa una chiavetta USB 3.0."; $lUSB.Left = 8; $lUSB.Top = 36
-    $lUSB.Width = 530; $lUSB.Height = 28; $lUSB.ForeColor = $cGrigio; $lUSB.BackColor = $cBianco
-    $panUSB.Controls.Add($lUSB)
+    $rbUSB.Text = "Installa su chiavetta USB (portabile)"
+    $rbUSB.Left = 20; $rbUSB.Top = 140; $rbUSB.Width = 300; $rbUSB.Height = 20
+    $rbUSB.BackColor = [System.Drawing.Color]::Transparent
+    $f.Controls.Add($rbUSB)
+    MakeLabel $f "Il programma girerà da chiavetta su qualsiasi PC Windows." 40 162 420 18
 
-    $panPC.Add_Click({ $rbPC.Checked = $true })
-    $panUSB.Add_Click({ $rbUSB.Checked = $true })
-
-    $sep = New-Object System.Windows.Forms.Panel
-    $sep.Left = 24; $sep.Top = 278; $sep.Width = 552; $sep.Height = 1
-    $sep.BackColor = $cBordo; $f.Controls.Add($sep)
-
-    NuovaLabelBold $f "Cartella di installazione:" 24 296 300 22 | Out-Null
-    $txtPath = NuovoInput $f 24 322 464 "C:\CassaOratorio" $false
-
-    $btnBrowse = NuovoBtnSecondario $f "..." 498 320 78 30
+    MakeLabel $f "Cartella di installazione:" 20 205 460 20 $true
+    $txtPath = MakeTextBox $f 20 225 380 "C:\CassaOratorio"
+    
+    $btnBrowse = MakeButton $f "..." 410 223 60 26
     $btnBrowse.Add_Click({
-        $d = New-Object System.Windows.Forms.FolderBrowserDialog
-        $d.Description = "Scegli cartella di installazione"
-        if ($d.ShowDialog() -eq "OK") { $txtPath.Text = Join-Path $d.SelectedPath "CassaOratorio" }
+        $browser = New-Object System.Windows.Forms.FolderBrowserDialog
+        $browser.Description = "Scegli dove installare Cassa Oratorio"
+        if ($browser.ShowDialog() -eq "OK") {
+            $txtPath.Text = Join-Path $browser.SelectedPath "CassaOratorio"
+        }
     })
 
+    # Aggiorna path in base alla scelta
     $rbUSB.Add_CheckedChanged({
         if ($rbUSB.Checked) {
-            $usb = $null
-            foreach ($drv in (Get-PSDrive -PSProvider FileSystem -EA SilentlyContinue)) {
-                try {
-                    $di = [System.IO.DriveInfo]::new($drv.Root)
-                    if ($di.DriveType -eq 'Removable') { $usb = $drv.Root; break }
-                } catch {}
+            # Cerca drive rimovibili
+            $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -match '^[A-Z]:\\$' }
+            $usb = $drives | Where-Object {
+                $d = [System.IO.DriveInfo]::new($_.Root)
+                $d.DriveType -eq 'Removable'
+            } | Select-Object -First 1
+            if ($usb) {
+                $txtPath.Text = Join-Path $usb.Root "CassaOratorio"
+            } else {
+                $txtPath.Text = "D:\CassaOratorio"
             }
-            $txtPath.Text = if ($usb) { Join-Path $usb "CassaOratorio" } else { "D:\CassaOratorio" }
+        } else {
+            $txtPath.Text = "C:\CassaOratorio"
         }
     })
-    $rbPC.Add_CheckedChanged({ if ($rbPC.Checked) { $txtPath.Text = "C:\CassaOratorio" } })
 
-    $btnOk  = NuovoBtnPrimario   $f "Avanti" 432 450 144 40
-    $btnInd = NuovoBtnSecondario $f "Indietro" 24 450 120 40
+    MakeLabel $f "Nota: la cartella verrà creata se non esiste." 20 260 460 18
 
-    $script:r2 = $null
-    $btnOk.Add_Click({
+    $btnNext = MakeButton $f "Avanti →" 380 430 140 35 $true
+    $btnBack = MakeButton $f "← Indietro" 20 430 100 35
+
+    $result = $null
+    $btnNext.Add_Click({
         if ([string]::IsNullOrWhiteSpace($txtPath.Text)) {
-            [System.Windows.Forms.MessageBox]::Show("Inserisci una cartella.", "Attenzione") | Out-Null
+            [System.Windows.Forms.MessageBox]::Show("Inserisci una cartella di installazione.", "Errore")
             return
         }
-        $script:r2 = @{ action = "next"; path = $txtPath.Text; usb = $rbUSB.Checked }
+        $script:result = @{ action="next"; path=$txtPath.Text; usb=$rbUSB.Checked }
         $f.Close()
     })
-    $btnInd.Add_Click({ $script:r2 = @{ action = "back" }; $f.Close() })
+    $btnBack.Add_Click({ $script:result = @{ action="back" }; $f.Close() })
+
     $f.ShowDialog() | Out-Null
-    return $script:r2
+    return $script:result
 }
 
-# ── Schermata 3: Account ──────────────────────────────────────
-function S3_Account {
-    $f = NuovaFinestra "Cassa Oratorio - Account" 600 450
-    AggiungiHeader $f "Account amministratore" "Servono per accedere al pannello di configurazione"
+# ── Schermata 3: Account amministratore ─────────────────────
+function ShowAccount {
+    $f = MakeForm "Cassa Oratorio - Account amministratore" 540 440
 
-    $nota = New-Object System.Windows.Forms.Panel
-    $nota.Left = 24; $nota.Top = 100; $nota.Width = 552; $nota.Height = 44
-    $nota.BackColor = [System.Drawing.Color]::FromArgb(239, 246, 255)
-    $nota.BorderStyle = "FixedSingle"; $f.Controls.Add($nota)
-    $ntxt = New-Object System.Windows.Forms.Label
-    $ntxt.Text = "Conserva email e password - servono per il pannello admin di PocketBase."
-    $ntxt.Left = 12; $ntxt.Top = 10; $ntxt.Width = 528; $ntxt.Height = 24
-    $ntxt.ForeColor = [System.Drawing.Color]::FromArgb(29, 78, 216)
-    $ntxt.BackColor = [System.Drawing.Color]::Transparent
-    $nota.Controls.Add($ntxt)
+    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $t = New-Object System.Windows.Forms.Label
+    $t.Text = "Crea l'account amministratore"
+    $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
+    $t.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $t.ForeColor = [System.Drawing.Color]::White
+    $t.BackColor = [System.Drawing.Color]::Transparent
+    $header.Controls.Add($t)
 
-    NuovaLabelBold $f "Email amministratore" 24 162 300 22 | Out-Null
-    $txtEmail = NuovoInput $f 24 188 552 "admin@cassaoratorio.it" $false
-    NuovaLabelBold $f "Password (minimo 8 caratteri)" 24 228 300 22 | Out-Null
-    $txtPwd  = NuovoInput $f 24 254 552 "" $true
-    NuovaLabelBold $f "Conferma password" 24 294 300 22 | Out-Null
-    $txtPwd2 = NuovoInput $f 24 320 552 "" $true
+    MakeLabel $f "Questi dati servono per accedere al pannello di amministrazione." 20 80 460 18
+    MakeLabel $f "Conservali in un posto sicuro." 20 100 460 18
 
-    $btnOk  = NuovoBtnPrimario   $f "Avanti" 432 380 144 40
-    $btnInd = NuovoBtnSecondario $f "Indietro" 24 380 120 40
+    MakeLabel $f "Email amministratore:" 20 140 460 20 $true
+    $txtEmail = MakeTextBox $f 20 162 440 "admin@cassaoratorio.it"
 
-    $script:r3 = $null
-    $btnOk.Add_Click({
+    MakeLabel $f "Password (minimo 8 caratteri):" 20 200 460 20 $true
+    $txtPwd = MakeTextBox $f 20 222 440 "" $true
+
+    MakeLabel $f "Conferma password:" 20 260 460 20 $true
+    $txtPwd2 = MakeTextBox $f 20 282 440 "" $true
+
+    $btnNext = MakeButton $f "Avanti →" 380 390 140 35 $true
+    $btnBack = MakeButton $f "← Indietro" 20 390 100 35
+
+    $result = $null
+    $btnNext.Add_Click({
         if ($txtEmail.Text -notmatch '@') {
-            [System.Windows.Forms.MessageBox]::Show("Email non valida.", "Attenzione") | Out-Null; return
+            [System.Windows.Forms.MessageBox]::Show("Inserisci un'email valida.", "Errore"); return
         }
         if ($txtPwd.Text.Length -lt 8) {
-            [System.Windows.Forms.MessageBox]::Show("Password troppo corta (min 8).", "Attenzione") | Out-Null; return
+            [System.Windows.Forms.MessageBox]::Show("La password deve essere di almeno 8 caratteri.", "Errore"); return
         }
         if ($txtPwd.Text -ne $txtPwd2.Text) {
-            [System.Windows.Forms.MessageBox]::Show("Le password non coincidono.", "Attenzione") | Out-Null; return
+            [System.Windows.Forms.MessageBox]::Show("Le password non coincidono.", "Errore"); return
         }
-        $script:r3 = @{ action = "next"; email = $txtEmail.Text; password = $txtPwd.Text }
+        $script:result = @{ action="next"; email=$txtEmail.Text; password=$txtPwd.Text }
         $f.Close()
     })
-    $btnInd.Add_Click({ $script:r3 = @{ action = "back" }; $f.Close() })
+    $btnBack.Add_Click({ $script:result = @{ action="back" }; $f.Close() })
+
     $f.ShowDialog() | Out-Null
-    return $script:r3
+    return $script:result
 }
 
-# ── Schermata 4: Riepilogo ────────────────────────────────────
-function S4_Riepilogo([string]$path, [string]$email) {
-    $f = NuovaFinestra "Cassa Oratorio - Riepilogo" 600 440
-    AggiungiHeader $f "Pronto per l'installazione" "Controlla e clicca Installa"
+# ── Schermata 4: Opzioni finali ───────────────────────────────
+function ShowOptions {
+    $f = MakeForm "Cassa Oratorio - Opzioni" 540 420
 
-    $box = New-Object System.Windows.Forms.Panel
-    $box.Left = 24; $box.Top = 100; $box.Width = 552; $box.Height = 80
-    $box.BackColor = $cBianco; $box.BorderStyle = "FixedSingle"; $f.Controls.Add($box)
-    $rl = New-Object System.Windows.Forms.Label
-    $rl.Text = "Cartella:  $path`nEmail:     $email"
-    $rl.Left = 16; $rl.Top = 10; $rl.Width = 520; $rl.Height = 60
-    $rl.Font = New-Object System.Drawing.Font("Consolas", 9)
-    $rl.ForeColor = $cTesto; $rl.BackColor = $cBianco
-    $box.Controls.Add($rl)
+    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $t = New-Object System.Windows.Forms.Label
+    $t.Text = "Opzioni di installazione"
+    $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
+    $t.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $t.ForeColor = [System.Drawing.Color]::White
+    $t.BackColor = [System.Drawing.Color]::Transparent
+    $header.Controls.Add($t)
 
-    $cbDesk = New-Object System.Windows.Forms.CheckBox
-    $cbDesk.Text = "Crea collegamento sul desktop"
-    $cbDesk.Left = 24; $cbDesk.Top = 200; $cbDesk.Width = 400; $cbDesk.Height = 26
-    $cbDesk.Checked = $true; $cbDesk.BackColor = [System.Drawing.Color]::Transparent
-    $f.Controls.Add($cbDesk)
+    $cbDesktop = New-Object System.Windows.Forms.CheckBox
+    $cbDesktop.Text = "Crea collegamento sul desktop"
+    $cbDesktop.Left = 20; $cbDesktop.Top = 90; $cbDesktop.Width = 400; $cbDesktop.Height = 22
+    $cbDesktop.Checked = $true
+    $cbDesktop.BackColor = [System.Drawing.Color]::Transparent
+    $f.Controls.Add($cbDesktop)
 
     $cbAvvia = New-Object System.Windows.Forms.CheckBox
-    $cbAvvia.Text = "Avvia Cassa Oratorio al termine"
-    $cbAvvia.Left = 24; $cbAvvia.Top = 234; $cbAvvia.Width = 400; $cbAvvia.Height = 26
-    $cbAvvia.Checked = $true; $cbAvvia.BackColor = [System.Drawing.Color]::Transparent
+    $cbAvvia.Text = "Avvia Cassa Oratorio al termine dell'installazione"
+    $cbAvvia.Left = 20; $cbAvvia.Top = 120; $cbAvvia.Width = 400; $cbAvvia.Height = 22
+    $cbAvvia.Checked = $true
+    $cbAvvia.BackColor = [System.Drawing.Color]::Transparent
     $f.Controls.Add($cbAvvia)
 
-    $btnOk  = NuovoBtnPrimarioVerde $f "Installa ora" 408 366 168 40
-    $btnInd = NuovoBtnSecondario    $f "Indietro" 24 366 120 40
+    MakeLabel $f "Riepilogo installazione:" 20 165 460 20 $true
+    $lblRiepilogo = MakeLabel $f "" 20 188 460 60
 
-    $script:r4 = $null
-    $btnOk.Add_Click({ $script:r4 = @{ action = "install"; desktop = $cbDesk.Checked; avvia = $cbAvvia.Checked }; $f.Close() })
-    $btnInd.Add_Click({ $script:r4 = @{ action = "back" }; $f.Close() })
+    $btnInstalla = MakeButton $f "Installa ora" 360 360 160 35 $true
+    $btnBack = MakeButton $f "← Indietro" 20 360 100 35
+
+    $result = $null
+    $btnInstalla.Add_Click({
+        $script:result = @{
+            action="install"
+            desktop=$cbDesktop.Checked
+            avvia=$cbAvvia.Checked
+        }
+        $f.Close()
+    })
+    $btnBack.Add_Click({ $script:result = @{ action="back" }; $f.Close() })
+
     $f.ShowDialog() | Out-Null
-    return $script:r4
+    return $script:result
 }
 
-# ── Schermata 5: Installazione ────────────────────────────────
-function S5_Installa([string]$path, [string]$email, [string]$pwd, [bool]$desktop) {
-    $f = NuovaFinestra "Cassa Oratorio - Installazione" 600 520
+# ── Schermata 5: Installazione in corso ──────────────────────
+function ShowProgress($installPath, $email, $password, $isUSB, $desktop) {
+    $f = MakeForm "Cassa Oratorio - Installazione in corso..." 540 460
     $f.ControlBox = $false
-    AggiungiHeader $f "Installazione in corso..." "Non chiudere questa finestra"
 
-    $lblS = New-Object System.Windows.Forms.Label
-    $lblS.Left = 24; $lblS.Top = 100; $lblS.Width = 552; $lblS.Height = 24
-    $lblS.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-    $lblS.ForeColor = $cBlu; $lblS.BackColor = [System.Drawing.Color]::Transparent
-    $f.Controls.Add($lblS)
+    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $t = New-Object System.Windows.Forms.Label
+    $t.Text = "Installazione in corso..."
+    $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
+    $t.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $t.ForeColor = [System.Drawing.Color]::White
+    $t.BackColor = [System.Drawing.Color]::Transparent
+    $header.Controls.Add($t)
 
-    $prog = New-Object System.Windows.Forms.ProgressBar
-    $prog.Left = 24; $prog.Top = 130; $prog.Width = 552; $prog.Height = 18
-    $prog.Minimum = 0; $prog.Maximum = 100; $prog.Style = "Continuous"
-    $f.Controls.Add($prog)
+    $lblStatus = MakeLabel $f "Preparazione..." 20 90 460 20
+    $progress = New-Object System.Windows.Forms.ProgressBar
+    $progress.Left = 20; $progress.Top = 118; $progress.Width = 460; $progress.Height = 24
+    $progress.Minimum = 0; $progress.Maximum = 100; $progress.Value = 0
+    $progress.Style = "Continuous"
+    $f.Controls.Add($progress)
 
-    $log = New-Object System.Windows.Forms.RichTextBox
-    $log.Left = 24; $log.Top = 158; $log.Width = 552; $log.Height = 290
-    $log.ReadOnly = $true
-    $log.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
-    $log.ForeColor = [System.Drawing.Color]::FromArgb(134, 239, 172)
-    $log.Font = New-Object System.Drawing.Font("Consolas", 9)
-    $log.BorderStyle = "None"
+    $log = New-Object System.Windows.Forms.TextBox
+    $log.Left = 20; $log.Top = 155; $log.Width = 460; $log.Height = 160
+    $log.Multiline = $true; $log.ScrollBars = "Vertical"
+    $log.ReadOnly = $true; $log.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
+    $log.ForeColor = [System.Drawing.Color]::FromArgb(100, 200, 100)
+    $log.Font = New-Object System.Drawing.Font("Consolas", 8)
     $f.Controls.Add($log)
 
-    $btnFine = NuovoBtnPrimario $f "Fine - Chiudi" 408 460 168 40
+    $btnFine = MakeButton $f "Fine" 360 400 160 35 $true
     $btnFine.Enabled = $false
 
-    $script:instOk = $true
-    $script:instPath = $path
+    $ok = $true
 
     $f.Add_Shown({
-        $addLog = {
-            param([string]$msg, [bool]$ok = $true)
-            $prefix = if ($ok) { "> " } else { "! " }
-            $log.AppendText("$prefix$msg`n")
+        $addLog = { param($msg, $col="ok")
+            $log.AppendText("> $msg`r`n")
             $log.ScrollToCaret()
-            $f.Refresh()
-        }
-        $setStep = {
-            param([string]$msg, [int]$pct)
-            $lblS.Text = $msg
-            $prog.Value = [Math]::Min(100, $pct)
             $f.Refresh()
         }
 
         # Step 1: Crea cartella
-        & $setStep "Creazione cartella..." 5
+        $lblStatus.Text = "Creazione cartella..."; $progress.Value = 5; $f.Refresh()
         try {
-            New-Item -ItemType Directory -Force -Path $path | Out-Null
-            & $addLog "Cartella: $path"
+            New-Item -ItemType Directory -Force -Path $installPath | Out-Null
+            & $addLog "Cartella creata: $installPath"
         } catch {
-            & $addLog "ERRORE: $_" $false
-            $script:instOk = $false
+            & $addLog "ERRORE: $_"; $ok = $false
         }
 
         # Step 2: Copia file
-        & $setStep "Copia file..." 15
+        $lblStatus.Text = "Copia file..."; $progress.Value = 15; $f.Refresh()
         $src = Split-Path -Parent $MyInvocation.ScriptName
         try {
-            $ex = @('pb_data', 'cassa.config.json', 'cassa.log', 'backup', 'node_modules', 'dist', '.env')
+            $exclude = @('pb_data', 'cassa.config.json', 'cassa.log', 'backup', 'node_modules', 'dist')
             Get-ChildItem $src -Recurse | Where-Object {
-                $rel = $_.FullName.Substring($src.Length + 1)
-                $skip = $false
-                foreach ($e in $ex) { if ($rel -like "*$e*") { $skip = $true; break } }
-                -not $skip
+                $rel = $_.FullName.Substring($src.Length)
+                -not ($exclude | Where-Object { $rel -match [regex]::Escape($_) })
             } | ForEach-Object {
-                $dest = Join-Path $path $_.FullName.Substring($src.Length)
+                $dest = Join-Path $installPath $_.FullName.Substring($src.Length)
                 if ($_.PSIsContainer) {
                     New-Item -ItemType Directory -Force -Path $dest | Out-Null
                 } else {
-                    $dd = Split-Path $dest
-                    if (-not (Test-Path $dd)) { New-Item -ItemType Directory -Force -Path $dd | Out-Null }
-                    Copy-Item $_.FullName $dest -Force -EA SilentlyContinue
+                    $destDir = Split-Path $dest
+                    if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+                    Copy-Item $_.FullName $dest -Force
                 }
             }
             & $addLog "File copiati"
         } catch {
-            & $addLog "ERRORE copia: $_" $false
-            $script:instOk = $false
+            & $addLog "ERRORE copia: $_"; $ok = $false
         }
 
-        # Step 3: Node.js
-        & $setStep "Verifica Node.js..." 25
+        # Step 3: Verifica Node.js
+        $lblStatus.Text = "Verifica Node.js..."; $progress.Value = 25; $f.Refresh()
         try {
-            $nv = & node --version 2>&1
-            & $addLog "Node.js: $nv"
+            $nodeVer = & node --version 2>&1
+            & $addLog "Node.js: $nodeVer"
         } catch {
-            & $addLog "ATTENZIONE: Node.js non trovato - installa da nodejs.org" $false
+            & $addLog "ATTENZIONE: Node.js non trovato. Installa da nodejs.org"
         }
 
-        # Step 4: npm install
-        & $setStep "Installazione dipendenze..." 35
-        $fd = Join-Path $path "frontend-src"
-        if (Test-Path $fd) {
+        # Step 4: Build frontend
+        $lblStatus.Text = "Compilazione interfaccia (potrebbe richiedere qualche minuto)..."; $progress.Value = 35; $f.Refresh()
+        $frontDir = Join-Path $installPath "frontend-src"
+        if (Test-Path $frontDir) {
             try {
                 & $addLog "npm install in corso..."
-                Push-Location $fd
-                $null = & npm install --prefer-offline 2>&1
-                Pop-Location
-                & $addLog "Dipendenze OK"
-
-                # Step 5: Build
-                & $setStep "Compilazione interfaccia..." 60
-                "VITE_PB_URL=" | Set-Content (Join-Path $fd ".env") -Encoding UTF8
-                Push-Location $fd
-                $null = & npm run build 2>&1
-                Pop-Location
-
-                $dist = Join-Path $fd "dist"
-                $pub  = Join-Path $path "app\pb_public"
-                New-Item -ItemType Directory -Force -Path $pub | Out-Null
-
-                if (Test-Path $dist) {
-                    Copy-Item "$dist\*" $pub -Recurse -Force
-                    & $addLog "Interfaccia compilata"
-                } else {
-                    & $addLog "ERRORE: build fallita - controlla Node.js" $false
-                    $script:instOk = $false
-                }
+                $npmOut = & cmd /c "cd /d `"$frontDir`" && npm install 2>&1"
+                & $addLog "Dipendenze installate"
+                $progress.Value = 60; $f.Refresh()
+                & $addLog "Build in corso..."
+                "VITE_PB_URL=" | Set-Content (Join-Path $frontDir ".env") -Encoding UTF8
+                $buildOut = & cmd /c "cd /d `"$frontDir`" && npm run build 2>&1"
+                # Copia dist in pb_public
+                $distDir = Join-Path $frontDir "dist"
+                $pbPublic = Join-Path $installPath "app\pb_public"
+                New-Item -ItemType Directory -Force -Path $pbPublic | Out-Null
+                Copy-Item "$distDir\*" $pbPublic -Recurse -Force
+                & $addLog "Interfaccia compilata"
+                $progress.Value = 80
             } catch {
-                & $addLog "ERRORE build: $_" $false
-                $script:instOk = $false
-                Pop-Location -EA SilentlyContinue
+                & $addLog "ERRORE build: $_"; $ok = $false
             }
         }
 
-        # Step 6: Config
-        & $setStep "Configurazione..." 85
-        @{ firstRun = $true; adminEmail = $email; adminPasswordPlain = $pwd } |
-            ConvertTo-Json | Set-Content (Join-Path $path "cassa.config.json") -Encoding UTF8
-        & $addLog "Credenziali salvate"
+        # Step 5: Salva credenziali per primo avvio
+        $lblStatus.Text = "Configurazione..."; $progress.Value = 85; $f.Refresh()
+        $cfgPath = Join-Path $installPath "cassa.config.json"
+        $cfg = @{ firstRun=$true; adminEmail=$email; adminPasswordPlain=$password } | ConvertTo-Json
+        $cfg | Set-Content $cfgPath -Encoding UTF8
+        & $addLog "Configurazione salvata"
 
-        # Step 7: Desktop
+        # Step 6: Collegamento desktop
         if ($desktop) {
-            & $setStep "Collegamento desktop..." 92
+            $progress.Value = 90; $f.Refresh()
             try {
-                $sh  = New-Object -ComObject WScript.Shell
-                $lnk = $sh.CreateShortcut("$env:USERPROFILE\Desktop\Cassa Oratorio.lnk")
-                $lnk.TargetPath      = Join-Path $path "AVVIA_CASSA.bat"
-                $lnk.WorkingDirectory = $path
-                $lnk.Description     = "Avvia Cassa Oratorio"
-                $lnk.Save()
-                & $addLog "Collegamento creato"
+                $batPath = Join-Path $installPath "AVVIA_CASSA.bat"
+                $shell = New-Object -ComObject WScript.Shell
+                $shortcut = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Cassa Oratorio.lnk")
+                $shortcut.TargetPath = $batPath
+                $shortcut.WorkingDirectory = $installPath
+                $shortcut.Description = "Avvia Cassa Oratorio"
+                $shortcut.Save()
+                & $addLog "Collegamento desktop creato"
             } catch {
-                & $addLog "ATTENZIONE: collegamento non creato" $false
+                & $addLog "ATTENZIONE: collegamento non creato: $_"
             }
         }
 
-        $prog.Value = 100
-        if ($script:instOk) {
-            $lblS.Text     = "Installazione completata!"
-            $lblS.ForeColor = $cVerde
-            & $addLog "=== COMPLETATO ==="
+        $progress.Value = 100
+        if ($ok) {
+            $lblStatus.Text = "Installazione completata!"
+            $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(22, 163, 74)
+            & $addLog "=== INSTALLAZIONE COMPLETATA ==="
         } else {
-            $lblS.Text      = "Completato con avvisi - controlla i messaggi"
-            $lblS.ForeColor = [System.Drawing.Color]::FromArgb(217, 119, 6)
+            $lblStatus.Text = "Installazione completata con errori"
+            $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(220, 38, 38)
         }
         $btnFine.Enabled = $true
+        $script:installOk = $ok
+        $script:installPath2 = $installPath
     })
 
     $btnFine.Add_Click({ $f.Close() })
     $f.ShowDialog() | Out-Null
-    return $script:instOk
+    return $script:installOk
 }
 
 # ── Main ──────────────────────────────────────────────────────
 $step = 1
-$loc  = $null
-$acc  = $null
-$opt  = $null
+$locResult = $null
+$accResult = $null
+$optResult = $null
 
 while ($true) {
     switch ($step) {
         1 {
-            $r = S1_Benvenuto
+            $r = ShowWelcome
             if ($r -eq "exit") { exit }
             $step = 2
         }
         2 {
-            $loc = S2_Posizione
-            if ($loc.action -eq "back") { $step = 1 } else { $step = 3 }
+            $locResult = ShowLocation
+            if ($locResult.action -eq "back") { $step = 1 }
+            else { $step = 3 }
         }
         3 {
-            $acc = S3_Account
-            if ($acc.action -eq "back") { $step = 2 } else { $step = 4 }
+            $accResult = ShowAccount
+            if ($accResult.action -eq "back") { $step = 2 }
+            else { $step = 4 }
         }
         4 {
-            $opt = S4_Riepilogo $loc.path $acc.email
-            if ($opt.action -eq "back") {
-                $step = 3
-            } else {
-                $ok = S5_Installa $loc.path $acc.email $acc.password $opt.desktop
-                if ($ok -and $opt.avvia) {
-                    $bat = Join-Path $loc.path "AVVIA_CASSA.bat"
+            $optResult = ShowOptions
+            if ($optResult.action -eq "back") { $step = 3 }
+            else {
+                # Installa
+                $ok = ShowProgress `
+                    -installPath $locResult.path `
+                    -email $accResult.email `
+                    -password $accResult.password `
+                    -isUSB $locResult.usb `
+                    -desktop $optResult.desktop
+
+                if ($ok -and $optResult.avvia) {
+                    $bat = Join-Path $locResult.path "AVVIA_CASSA.bat"
                     if (Test-Path $bat) { Start-Process $bat }
                 }
+
                 [System.Windows.Forms.MessageBox]::Show(
-                    "Cassa Oratorio installata in:`n$($loc.path)`n`nUsa AVVIA_CASSA.bat per avviare.",
+                    "Cassa Oratorio è stata installata in:`n$($locResult.path)`n`nUsa AVVIA_CASSA.bat per avviare la cassa.",
                     "Installazione completata",
                     [System.Windows.Forms.MessageBoxButtons]::OK,
                     [System.Windows.Forms.MessageBoxIcon]::Information

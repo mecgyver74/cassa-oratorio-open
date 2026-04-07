@@ -46,7 +46,8 @@ function htmlScontrino(scontrino, righe, cfg) {
       ${mostraData ? `<div>Data: ${new Date(scontrino.data_ora).toLocaleString('it-IT')}</div>` : ''}
       <div>Scontrino n. ${String(scontrino.numero).padStart(4,'0')}</div>
       ${mostraCassa && scontrino.postazione ? `<div>Cassa: ${scontrino.postazione}</div>` : ''}
-      ${scontrino.tavolo ? `<div style="font-weight:bold">Tavolo: ${scontrino.tavolo}</div>` : ''}
+      ${scontrino.asporto ? `<div style="font-weight:bold;font-size:1.2em;text-align:center;border:2px solid #000;padding:2px">*** ASPORTO ***</div>` : ''}
+      ${scontrino.tavolo && !scontrino.asporto ? `<div style="font-weight:bold">Tavolo: ${scontrino.tavolo}</div>` : ''}
       ${scontrino.note ? `<div>Note: ${scontrino.note}</div>` : ''}
       <hr style="border:none;border-top:1px dashed #000;margin:4px 0">
       <table style="width:100%;border-collapse:collapse">
@@ -95,7 +96,8 @@ function htmlComanda(nomeComanda, righe, scontrino, cfg) {
       </div>
       ${mostraNumero ? `<div style="font-weight:bold;font-size:${fontSizeComanda}px">Scontrino #${String(scontrino.numero).padStart(4,'0')}</div>` : ''}
       ${mostraOrario ? `<div style="font-size:${fontSizeComanda}px">${new Date(scontrino.data_ora).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
-      ${mostraTavolo && scontrino.tavolo ? `<div style="font-size:${fontSizeComanda+4}px;font-weight:900;border-bottom:2px solid #000">TAVOLO ${scontrino.tavolo}</div>` : ''}
+      ${scontrino.asporto ? `<div style="font-size:${fontSizeComanda+4}px;font-weight:900;border:2px solid #000;text-align:center">*** ASPORTO ***</div>` : ''}
+      ${mostraTavolo && scontrino.tavolo && !scontrino.asporto ? `<div style="font-size:${fontSizeComanda+4}px;font-weight:900;border-bottom:2px solid #000">TAVOLO ${scontrino.tavolo}</div>` : ''}
       ${scontrino.note ? `<div style="font-size:${fontSizeComanda-1}px;font-style:italic">Note: ${scontrino.note}</div>` : ''}
       <hr style="border:none;border-top:2px solid #000;margin:4px 0">
       <table style="width:100%;border-collapse:collapse"><tbody>${righeHtml}</tbody></table>

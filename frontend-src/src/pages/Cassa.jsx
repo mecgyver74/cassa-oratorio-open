@@ -19,6 +19,7 @@ export default function Cassa({ utente }) {
   const [pagOpen, setPagOpen] = useState(false)
   const [storicoOpen, setStoricoOpen] = useState(false)
   const [nextNum, setNextNum] = useState('—')
+  const [asporto, setAsporto] = useState(false)
   const [scontoV, setScontoV] = useState('')
   const [scontoT, setScontoT] = useState('€')
 
@@ -119,11 +120,12 @@ export default function Cassa({ utente }) {
   }
 
   const handlePaga = async (params) => {
-    const res = await cassa.pagaeSalva({ ...params, utente })
+    const res = await cassa.pagaeSalva({ ...params, utente, asporto })
     if (res.ok) {
       toast(`Scontrino #${res.numero} pagato`, 'v')
       setNextNum(res.numero + 1)
       setPagOpen(false)
+      setAsporto(false)
       ricaricaProdotti()
     } else {
       toast('Errore: ' + res.error, 'r')
@@ -146,17 +148,20 @@ export default function Cassa({ utente }) {
   // Prodotti raggruppati per famiglia (quando "Tutti")
   const renderProdotti = () => {
     if (famSel !== 0) {
+      // Mostra solo se la famiglia selezionata è attiva
+      const famAttiva = famiglie.find(f => f.id === famSel)
+      if (!famAttiva) return null
       const filtered = prodotti.filter(p => p.famiglia === famSel && !p.solo_menu)
       return renderGriglia(filtered)
     }
-    // Raggruppa per famiglia nell'ordine delle famiglie
+    // Raggruppa per famiglia nell'ordine delle famiglie (solo famiglie attive)
+    const famIds = new Set(famiglie.map(f => f.id))
     const famConProdotti = famiglie.map(f => ({
       fam: f,
       prods: prodotti.filter(p => p.famiglia === f.id && !p.solo_menu)
     })).filter(g => g.prods.length > 0)
-    // Prodotti senza famiglia
-    const famIds = new Set(famiglie.map(f => f.id))
-    const senzaFam = prodotti.filter(p => !famIds.has(p.famiglia) && !p.solo_menu)
+    // Prodotti senza famiglia (nascosti se la famiglia è disattivata)
+    const senzaFam = prodotti.filter(p => !p.famiglia && !p.solo_menu)
 
     return (
       <>
@@ -198,7 +203,7 @@ export default function Cassa({ utente }) {
         style={{ background: bgColor, boxShadow: `0 3px 10px ${bgColor}44`,
           height: btnHeight, minHeight: btnHeight,
           width: btnWidth, minWidth: btnWidth }}
-        onClick={() => { if (!esaurito) { cassa.addProdotto(p); toast('+' + p.nome, 'v') } }}>
+        onClick={() => { if (!esaurito) { cassa.addProdotto(p, msg => toast(msg, 'r')) } }}>
         <div className="pn" style={{ fontSize: nomeFontSize, color: colNome }}>{p.nome}</div>
         <div className="pp" style={{ fontSize: prezzoFontSize, color: colPrezzo }}>{EUR(p.prezzo)}</div>
         <div className={`ps ${sc.low ? 'low' : ''}`} style={{ color: colGiacenza }}>
@@ -272,6 +277,11 @@ export default function Cassa({ utente }) {
           }}>
             {cassa.tavolo ? `T.${cassa.tavolo.numero}` : '+ Tavolo'}
           </button>
+          <button className="scont-tavolo-btn" onClick={() => setAsporto(a => !a)}
+            style={{ background: asporto ? '#f59e0b' : '', color: asporto ? '#000' : '',
+              fontWeight: asporto ? 800 : 400 }}>
+            {asporto ? '🥡 Asporto' : '🥡'}
+          </button>
         </div>
 
         <div className="righe-scont">
@@ -297,7 +307,7 @@ export default function Cassa({ utente }) {
                 <div className="riga-qta">
                   <button className="qta-btn" onClick={() => cassa.setQuantita(r._key, r.quantita - 1)}>−</button>
                   <span className="qta-val">{r.quantita}</span>
-                  <button className="qta-btn" onClick={() => cassa.setQuantita(r._key, r.quantita + 1)}>+</button>
+                  <button className="qta-btn" onClick={() => { const p = prodotti.find(x => x.id === r._prodotto_id); cassa.setQuantita(r._key, r.quantita + 1, p?.quantita, msg => toast(msg, 'r')) }}>+</button>
                 </div>
                 <div className={`riga-tot ${r.omaggio ? 'omaggio-tot' : ''}`}>
                   {r.omaggio ? 'omaggio' : EUR(r.prezzo_snapshot * r.quantita)}

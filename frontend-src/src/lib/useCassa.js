@@ -23,8 +23,27 @@ export function useCassa() {
   const getTotale = useCallback(() =>
     Math.max(0, getSub() - getScontoCalcolato()), [getSub, getScontoCalcolato])
 
-  const addProdotto = useCallback((prodotto) => {
+  const addProdotto = useCallback((prodotto, onErrore) => {
     setRighe(prev => {
+      // Conta TUTTE le righe dello stesso prodotto (pagate + omaggio)
+      const qtaCarrello = prev
+        .filter(r => r._prodotto_id === prodotto.id)
+        .reduce((s, r) => s + r.quantita, 0)
+      const scorta = prodotto.quantita
+
+      // Verifica scorta (scorta -1 = infinita)
+      if (scorta !== -1 && scorta !== undefined) {
+        if (scorta <= 0) {
+          onErrore && onErrore(`${prodotto.nome} è esaurito`)
+          return prev
+        }
+        if (qtaCarrello >= scorta) {
+          onErrore && onErrore(`${prodotto.nome}: scorta disponibile ${scorta} pz, già nel carrello ${qtaCarrello}`)
+          return prev
+        }
+      }
+
+      // Aggiungi alla riga pagata esistente (non omaggio)
       const idx = prev.findIndex(r => r._prodotto_id === prodotto.id && !r.omaggio)
       if (idx >= 0) {
         const n = [...prev]; n[idx] = { ...n[idx], quantita: n[idx].quantita + 1 }; return n
@@ -61,10 +80,21 @@ export function useCassa() {
     }])
   }, [])
 
-  const setQuantita = useCallback((key, q) => {
-    setRighe(prev => q <= 0
-      ? prev.filter(r => r._key !== key)
-      : prev.map(r => r._key === key ? { ...r, quantita: q } : r))
+  const setQuantita = useCallback((key, q, prodottoScorta, onErrore) => {
+    setRighe(prev => {
+      if (q <= 0) return prev.filter(r => r._key !== key)
+      if (prodottoScorta !== undefined && prodottoScorta !== -1) {
+        // Calcola totale per questo prodotto (tutte le righe tranne quella corrente)
+        const rigaCorrente = prev.find(r => r._key === key)
+        const altreRighe = prev.filter(r => r._key !== key && r._prodotto_id === rigaCorrente?._prodotto_id)
+        const qtaAltre = altreRighe.reduce((s, r) => s + r.quantita, 0)
+        if (qtaAltre + q > prodottoScorta) {
+          onErrore && onErrore(`Scorta disponibile: ${prodottoScorta} pz (già ${qtaAltre} in altre righe)`)
+          return prev
+        }
+      }
+      return prev.map(r => r._key === key ? { ...r, quantita: q } : r)
+    })
   }, [])
 
   const toggleOmaggio = useCallback((key) => {
@@ -79,7 +109,7 @@ export function useCassa() {
     setRighe([]); setScontoPerc(0); setScontoEuro(0); setTavolo(null); setNote('')
   }, [])
 
-  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente }) => {
+  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente, asporto }) => {
     setLoading(true)
     pb.autoCancellation(false)
     try {
@@ -108,6 +138,7 @@ export function useCassa() {
         pagato: Math.max(0, pagato || totale || 0),
         resto: Math.max(0, (pagato || totale || 0) - (totale || 0)),
         stornato: false,
+        asporto: asporto || false,
       })
 
       // Crea righe
@@ -167,8 +198,9 @@ export function useCassa() {
           if (righeC.length > 0) righePerComanda[comanda.id] = righeC
         }
 
-        // Una sola finestra con tutto
-        stampaTutto(scForPrint, righeSalvate, comande, righePerComanda, cfg)
+        // Una sola finestra con tutto - solo comande con invia_stampante=true
+        const comandeDaStampare = comande.filter(com => com.invia_stampante)
+        stampaTutto(scForPrint, righeSalvate, comandeDaStampare, righePerComanda, cfg)
       } catch(e) { console.warn('Errore stampa:', e) }
 
       svuota()

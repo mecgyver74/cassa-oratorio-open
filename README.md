@@ -1,53 +1,81 @@
-# Cassa Oratorio
+# 🏪 Cassa Oratorio
 
-Sistema di cassa open source per oratori italiani. Gestisce vendite, magazzino, comande per cucina/bar e statistiche di incasso. Gira interamente in locale su Windows, senza cloud e senza abbonamenti.
+Sistema POS (Point of Sale) open-source per oratori e parrocchie italiane. Pensato per gestire la cassa di sagre, feste e spacci.
 
-![Versione](https://img.shields.io/badge/versione-1.0.0-blue)
-![Licenza](https://img.shields.io/badge/licenza-MIT-green)
-![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
+**Versione corrente: 1.2.0**
 
-## Funzionalità
+## Caratteristiche
 
-- **Cassa** — prodotti raggruppati per famiglia, sconti, omaggi, note per riga
-- **Comande** — schermata live per cucina/bar, evase condivise tra dispositivi, riepilogo prodotti
-- **Magazzino** — scarico automatico, carichi manuali, movimenti, scorta infinita
-- **Statistiche** — incassi per periodo, venduto per prodotto, export CSV
-- **Stampa** — scontrino e comande in un'unica stampa, margini configurabili
-- **Multi-dispositivo** — accesso da tablet e telefoni sulla rete WiFi locale
-- **Portabile** — gira da chiavetta USB su qualsiasi PC Windows
+- **Cassa veloce** — griglia prodotti organizzata per famiglie colorate, touch-friendly
+- **Comande cucina/bar** — stampa separata per ogni postazione con display live e checkbox
+- **Gestione magazzino** — scorte real-time con controllo automatico alla vendita
+- **Asporto** — toggle dedicato con evidenziazione arancione e stampa su scontrino/comanda
+- **Pagamento flessibile** — contanti (con tagli banconote/monete Euro), carta, omaggio
+- **Storico scontrini** — con sconto post-vendita, storno e ristampa
+- **Export Excel** — 3 fogli: Venduto, Scontrini, Riepilogo
+- **Multi-dispositivo** — accesso simultaneo da PC, tablet e smartphone via WiFi locale
+- **Portabile** — funziona da chiavetta USB, nessuna installazione richiesta
+- **Schermo intero** — pulsante dedicato nella barra di navigazione
 
 ## Stack tecnologico
 
-- **Frontend**: React 18 + Vite
-- **Backend**: PocketBase v0.36 (SQLite embedded)
-- **Script avvio**: PowerShell
+| Componente | Tecnologia |
+|---|---|
+| Frontend | React 18 + Vite |
+| Backend | PocketBase v0.36.7 (SQLite embedded) |
+| Scripting | PowerShell (Windows) |
 
 ## Requisiti
 
 - Windows 10 o 11
-- Node.js LTS (solo per la prima compilazione)
-- Connessione internet al primo avvio (~15 MB per PocketBase)
+- Node.js (versione LTS, da [nodejs.org](https://nodejs.org))
+- Connessione internet solo al primo avvio (per `npm install`)
 
 ## Installazione rapida
 
-1. Scarica lo ZIP dalla pagina [Releases](../../releases)
-2. Estrai in una cartella (es. `C:\CassaOratorio\`)
-3. Installa [Node.js](https://nodejs.org) LTS
-4. Doppio clic su **`INSTALLA.bat`** — segui la procedura guidata
-5. Oppure manualmente: `BUILD_FRONTEND.bat` poi `AVVIA_CASSA.bat`
+1. Scarica o clona questo repository
+2. Doppio click su **`BUILD_FRONTEND.bat`** (compila il frontend, solo la prima volta)
+3. Doppio click su **`AVVIA_CASSA.bat`** (avvia il server)
+4. Si apre il browser su `http://127.0.0.1:8090`
+5. Al primo avvio crea un account admin su PocketBase
 
-## Accesso da tablet/telefono
+## Utilizzo quotidiano
 
-1. Avvia `AVVIA_CASSA.bat` come amministratore (apre la porta firewall)
-2. Apri la cassa usando l'IP di rete del PC (es. `http://192.168.1.15:8090`)
-3. Nella pagina Comande premi 📱 per il QR code
+1. Doppio click su **`AVVIA_CASSA.bat`**
+2. Non chiudere la finestra nera (è il server)
+3. Per spegnere: chiudi la finestra nera o premi CTRL+C
+
+## Accesso da tablet/smartphone
+
+1. Avvia la cassa sul PC principale
+2. Trova l'IP del PC (`ipconfig` nel prompt)
+3. Dal dispositivo mobile, apri `http://IP_DEL_PC:8090`
+4. Oppure usa il QR code dalla pagina Comande
+
+## Struttura del progetto
+
+```
+CassaOratorio/
+├── app/                    # Backend PocketBase
+│   ├── pocketbase.exe      # Eseguibile PocketBase
+│   ├── pb_migrations/      # Schema database
+│   └── pb_data/            # Dati (creato al primo avvio)
+├── frontend-src/           # Sorgenti React
+│   ├── src/
+│   │   ├── pages/          # Pagine (Cassa, Magazzino, Setup, ecc.)
+│   │   ├── components/     # Componenti (Pagamento, Storico, Toast)
+│   │   └── lib/            # Logica (useCassa, stampa, PocketBase client)
+│   └── package.json
+├── AVVIA_CASSA.bat         # Avvia tutto
+├── BUILD_FRONTEND.bat      # Compila il frontend
+├── CHANGELOG.md            # Storico versioni
+└── LEGGIMI.md              # Guida installazione dettagliata
+```
 
 ## Licenza
 
-MIT — vedi [LICENSE](LICENSE)
+MIT — Libero per uso personale e comunitario.
 
-## Crediti
+## Contributi
 
-- [PocketBase](https://pocketbase.io) — MIT License
-- [React](https://react.dev) — MIT License
-- [Vite](https://vitejs.dev) — MIT License
+Segnala bug e proponi miglioramenti tramite le [Issues](https://github.com/mecgyver74/cassa-oratorio-open/issues) su GitHub.

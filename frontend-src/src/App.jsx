@@ -58,6 +58,17 @@ export default function App() {
               fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
             Spegni
           </button>
+          <button
+            title="Schermo intero"
+            onClick={() => {
+              if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
+              else document.exitFullscreen().catch(() => {})
+            }}
+            style={{ marginLeft: 4, padding: '3px 8px', background: 'var(--surf2)',
+              color: 'var(--text2)', border: '1px solid var(--border)', borderRadius: 6,
+              cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>
+            ⛶
+          </button>
         </div>
 
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>

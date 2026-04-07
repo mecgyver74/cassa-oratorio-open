@@ -6,6 +6,8 @@ const EUR = v => '€ ' + Number(v).toFixed(2).replace('.', ',')
 
 function oggi() { return new Date().toISOString().slice(0, 10) }
 
+import * as XLSX from 'xlsx'
+
 export default function Statistiche() {
   const toast = useToast()
   const [dal, setDal] = useState(oggi())
@@ -118,41 +120,60 @@ export default function Statistiche() {
     w.document.close()
   }
 
-  // EXPORT CSV
-  const exportCSV = () => {
-    const rows = [
-      ['Prodotto','Quantita','Omaggi','Totale EUR'],
-      ...venduto.map(v => [v.nome, v.qta, v.omaggi||0, v.tot.toFixed(2)])
-    ]
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(';')).join('\
-')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `statistiche_${dal}_${al}.csv`
-    a.click()
-  }
+  // EXPORT XLSX
+  const exportXLSX = () => {
+    const wb = XLSX.utils.book_new()
 
-  // EXPORT SCONTRINI CSV
-  const exportScontriniCSV = () => {
-    const rows = [
-      ['Numero','Data','Totale','Pagamento','Stornato','Postazione'],
+    // Foglio 1: Venduto per prodotto
+    const rowsVenduto = [
+      ['Prodotto', 'Quantita totale', 'di cui omaggi', 'Quantita pagata', 'Totale EUR'],
+      ...venduto.map(v => [
+        v.nome,
+        (v.qta + (v.omaggi||0)),
+        v.omaggi||0,
+        v.qta,
+        parseFloat(v.tot.toFixed(2))
+      ])
+    ]
+    const ws1 = XLSX.utils.aoa_to_sheet(rowsVenduto)
+    ws1['!cols'] = [{wch:30},{wch:16},{wch:14},{wch:16},{wch:12}]
+    XLSX.utils.book_append_sheet(wb, ws1, 'Venduto')
+
+    // Foglio 2: Scontrini
+    const rowsScontrini = [
+      ['Numero','Data','Lordo EUR','Sconto EUR','Netto EUR','Pagamento','Stornato','Postazione'],
       ...scontrini.map(s => [
-        String(s.numero).padStart(4,'0'),
+        parseInt(s.numero),
         new Date(s.data_ora).toLocaleString('it-IT'),
-        s.totale_netto.toFixed(2),
+        parseFloat((s.totale_lordo||0).toFixed(2)),
+        parseFloat((s.sconto_euro||0).toFixed(2)),
+        parseFloat((s.totale_netto||0).toFixed(2)),
         s.tipo_pagamento,
         s.stornato ? 'SI' : 'NO',
         s.postazione || ''
       ])
     ]
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(';')).join('\
-')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `scontrini_${dal}_${al}.csv`
-    a.click()
+    const ws2 = XLSX.utils.aoa_to_sheet(rowsScontrini)
+    ws2['!cols'] = [{wch:8},{wch:18},{wch:10},{wch:10},{wch:10},{wch:10},{wch:8},{wch:12}]
+    XLSX.utils.book_append_sheet(wb, ws2, 'Scontrini')
+
+    // Foglio 3: Riepilogo
+    const rowsRiepilogo = [
+      ['Voce', 'Valore'],
+      ['Periodo', dal + ' — ' + al],
+      ['Incasso netto', parseFloat(incasso.toFixed(2))],
+      ['Incasso lordo', parseFloat(incassoLordo.toFixed(2))],
+      ['Sconti totali', parseFloat(scontiTot.toFixed(2))],
+      ['Scontrini', validi.length],
+      ['Media scontrino', parseFloat((validi.length ? incasso/validi.length : 0).toFixed(2))],
+      ['Contanti', parseFloat(incassoContanti.toFixed(2))],
+      ['Carta', parseFloat(incassoCarta.toFixed(2))],
+    ]
+    const ws3 = XLSX.utils.aoa_to_sheet(rowsRiepilogo)
+    ws3['!cols'] = [{wch:20},{wch:15}]
+    XLSX.utils.book_append_sheet(wb, ws3, 'Riepilogo')
+
+    XLSX.writeFile(wb, 'statistiche_' + dal + '_' + al + '.xlsx')
   }
 
   return (
@@ -165,16 +186,12 @@ export default function Statistiche() {
               borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
             Stampa
           </button>
-          <button onClick={exportCSV}
+          <button onClick={exportXLSX}
             style={{ padding: '7px 14px', background: 'var(--green)', color: '#fff', border: 'none',
               borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            ⬇ CSV Venduto
+            ⬇ Excel Venduto
           </button>
-          <button onClick={exportScontriniCSV}
-            style={{ padding: '7px 14px', background: 'var(--blue)', color: '#fff', border: 'none',
-              borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            ⬇ CSV Scontrini
-          </button>
+
         </div>
       </div>
 

@@ -148,6 +148,7 @@ migrate((app) => {
       { type: "number",   name: "pagato" },
       { type: "number",   name: "resto" },
       { type: "bool",     name: "stornato" },
+      { type: "bool",     name: "asporto" },
       { type: "date",     name: "data_storno" },
       { type: "text",     name: "note_storno" },
     ],
@@ -200,6 +201,18 @@ migrate((app) => {
   adminRecord.set("attivo", true)
   app.save(adminRecord)
 
+
+  // ── righe_pronte ───────────────────────────────────────────────────
+  const righePronte = new Collection({
+    name: "righe_pronte",
+    type: "base",
+    fields: [
+      { name: "riga_id",    type: "text", required: true },
+      { name: "comanda_id", type: "text", required: true },
+      { name: "pronta_at",  type: "date" },
+    ],
+  })
+  app.save(righePronte)
 
   // ── comande_evase ──────────────────────────────────────────────────
   const comandeEvase = new Collection({
