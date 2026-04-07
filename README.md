@@ -2,6 +2,8 @@
 
 Sistema POS (Point of Sale) open-source per oratori e parrocchie italiane. Pensato per gestire la cassa di sagre, feste e spacci.
 
+## NON FISCALE
+
 **Versione corrente: 1.2.0**
 
 ## Caratteristiche
