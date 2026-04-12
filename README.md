@@ -2,22 +2,21 @@
 
 Sistema POS (Point of Sale) open-source per oratori e parrocchie italiane. Pensato per gestire la cassa di sagre, feste e spacci.
 
-## NON FISCALE
-
-**Versione corrente: 1.2.0**
+**Versione corrente: 1.3.0**
 
 ## Caratteristiche
 
 - **Cassa veloce** — griglia prodotti organizzata per famiglie colorate, touch-friendly
-- **Comande cucina/bar** — stampa separata per ogni postazione con display live e checkbox
+- **Ingredienti personalizzabili** — configura gli ingredienti per ogni prodotto, il cassiere può escluderli con un click (es. "no insalata")
+- **Comande cucina/bar** — stampa separata per ogni postazione con display live e checkbox per-riga
 - **Gestione magazzino** — scorte real-time con controllo automatico alla vendita
 - **Asporto** — toggle dedicato con evidenziazione arancione e stampa su scontrino/comanda
 - **Pagamento flessibile** — contanti (con tagli banconote/monete Euro), carta, omaggio
 - **Storico scontrini** — con sconto post-vendita, storno e ristampa
 - **Export Excel** — 3 fogli: Venduto, Scontrini, Riepilogo
 - **Multi-dispositivo** — accesso simultaneo da PC, tablet e smartphone via WiFi locale
-- **Portabile** — funziona da chiavetta USB, nessuna installazione richiesta
-- **Schermo intero** — pulsante dedicato nella barra di navigazione
+- **Portabile** — funziona da chiavetta USB, configurazioni salvate nel database
+- **Schermo intero** — pulsante dedicato, fullscreen preservato durante stampa e dialoghi
 
 ## Stack tecnologico
 
@@ -66,7 +65,7 @@ CassaOratorio/
 │   ├── src/
 │   │   ├── pages/          # Pagine (Cassa, Magazzino, Setup, ecc.)
 │   │   ├── components/     # Componenti (Pagamento, Storico, Toast)
-│   │   └── lib/            # Logica (useCassa, stampa, PocketBase client)
+│   │   └── lib/            # Logica (useCassa, stampa, config, fullscreen)
 │   └── package.json
 ├── AVVIA_CASSA.bat         # Avvia tutto
 ├── BUILD_FRONTEND.bat      # Compila il frontend

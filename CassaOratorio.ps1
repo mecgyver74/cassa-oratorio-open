@@ -1,6 +1,7 @@
 ﻿# CASSA ORATORIO - Launcher v1.5 (PocketBase v0.36+)
 $ErrorActionPreference = "Continue"
 $ProgressPreference    = "SilentlyContinue"
+$VerbosePreference     = "Continue"
 
 $Root     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppDir   = Join-Path $Root "app"
@@ -247,7 +248,7 @@ if (-not $portaLibera) {
 }
 Log "Avvio PocketBase..."
 # Usa cmd /c per avviare in una nuova finestra - più compatibile tra versioni Windows
-$pbCmd = "`"$PbExe`" serve --http=0.0.0.0:$PB_PORT --dir=`"$PbData`""
+$pbCmd = "`"$PbExe`" serve --http=0.0.0.0:$PB_PORT --dir=`"$PbData`" > pb_log.txt 2>&1"
 $pbProc = Start-Process -FilePath "cmd.exe" `
     -ArgumentList "/c", "title PocketBase Cassa && $pbCmd" `
     -WorkingDirectory $AppDir -PassThru
@@ -292,9 +293,15 @@ Write-Host "  Oppure usa il pulsante Spegni nell'interfaccia" -ForegroundColor D
 # Avvia listener HTTP per shutdown remoto sulla porta 8091
 $shutdownPort = 8091
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://+:$shutdownPort/shutdown/")
-try { $listener.Start() } catch { $listener = $null }
-
+$listener.Prefixes.Add("http://localhost:$shutdownPort/shutdown/")
+try { 
+    $listener.Start() 
+    Log "Listener avviato su localhost:$shutdownPort"
+} catch { 
+    $listener = $null 
+    Log "Errore avvio listener: $_"
+}
+$lastRequest = [DateTime]::Now
 try {
     while ($true) {
         # Controlla se arriva richiesta di shutdown
@@ -304,6 +311,7 @@ try {
                 $async = $listener.BeginGetContext($null, $null)
                 if ($async.AsyncWaitHandle.WaitOne(100)) {
                     $ctx = $listener.EndGetContext($async)
+                    Log "Richiesta ricevuta: $($ctx.Request.HttpMethod) $($ctx.Request.Url)"
                     $resp = $ctx.Response
                     $body = [System.Text.Encoding]::UTF8.GetBytes("OK")
                     $resp.ContentLength64 = $body.Length
@@ -312,7 +320,9 @@ try {
                     Log "Shutdown richiesto dall'interfaccia"
                     break
                 }
-            } catch { }
+            } catch { 
+                Log "Errore listener: $_"
+            }
         } else {
             Start-Sleep -Seconds 1
         }
@@ -328,13 +338,21 @@ try {
     Log "Chiusura..."
     if ($listener) { try { $listener.Stop() } catch { } }
     # Chiudi PocketBase e la finestra cmd che lo contiene
-    Stop-Process -Id $pbProc.Id -Force -EA SilentlyContinue
+    if ($pbProc) {
+        Stop-Process -Id $pbProc.Id -Force -EA SilentlyContinue
+    }
     Get-Process -Name "pocketbase" -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
-    # Chiudi le finestre cmd figlie
-    $pbProc.CloseMainWindow() | Out-Null
-    Start-Sleep -Milliseconds 500
+    if ($pbProc) {
+        $pbProc.CloseMainWindow() | Out-Null
+        Start-Sleep -Milliseconds 500
+    }
     LogOK "Cassa spenta"
     Start-Sleep -Seconds 1
     # Chiudi anche questa finestra
     Stop-Process -Id $PID -Force -EA SilentlyContinue
 }
+
+# Se arriviamo qui, c'è stato un errore
+Write-Host "Errore durante l'esecuzione" -ForegroundColor Red
+Write-Host "Premi invio per chiudere..." -ForegroundColor Yellow
+Read-Host

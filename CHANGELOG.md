@@ -1,5 +1,32 @@
 # Cassa Oratorio — Changelog
 
+## v1.3.0 (12/04/2026)
+
+### Nuove funzionalità
+- **Ingredienti personalizzabili**: nel Setup Prodotti è possibile configurare la lista ingredienti per ogni prodotto (separati da virgola). Nella Cassa, i prodotti con ingredienti mostrano un pulsante 🔧 sulla riga scontrino che apre un menu a tendina per escludere singoli ingredienti (es. "no insalata, no formaggio"). Le esclusioni appaiono automaticamente sullo scontrino e sulla comanda stampata.
+
+### Miglioramenti
+- **Configurazione persistente nel database**: tutte le impostazioni di aspetto, stampa e preferenze comande sono ora salvate nella collection `configurazione` di PocketBase invece che nel localStorage del browser. Le impostazioni viaggiano con la chiavetta USB su qualsiasi PC. Al primo avvio viene eseguita una migrazione automatica dal browser al database.
+- **Fullscreen preservato**: i dialoghi di conferma, inserimento testo e stampa non fanno più uscire dalla modalità schermo intero. Il fullscreen si ripristina automaticamente dopo ogni interazione.
+- **Stampa via iframe**: la stampa di scontrini, comande e statistiche usa un iframe nascosto invece di aprire una nuova finestra del browser.
+
+### File modificati
+- `1_init_schema.js` — campo `ingredienti` (JSON) nella collection `prodotti`
+- `Setup.jsx` — campo ingredienti nel form prodotto
+- `Cassa.jsx` — pulsante 🔧 + dropdown ingredienti, fullscreen fix
+- `useCassa.js` — passa `_ingredienti` alla riga carrello, usa `getConfig` da stampa.js
+- `stampa.js` — stampa via iframe, ripristino fullscreen, config da DB
+- `App.jsx` — migrazione localStorage → DB, fullscreen fix
+- `ComandeDisplay.jsx` — preferenze da DB
+- `EditorStampe.jsx` — config da DB
+- `Statistiche.jsx` — stampa via iframe, fullscreen fix
+- `ModaleStorico.jsx` — pulsante ristampa, fullscreen fix
+- `ModalePagamento.jsx` — layout compattato
+- `config.js` — NUOVO, utility lettura/scrittura configurazione da PocketBase
+- `fullscreen.js` — NUOVO, wrapper dialoghi con ripristino fullscreen
+
+---
+
 ## v1.2.0 (07/04/2026)
 
 ### Nuove funzionalità
