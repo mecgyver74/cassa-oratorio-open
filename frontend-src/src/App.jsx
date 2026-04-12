@@ -6,6 +6,9 @@ import Setup from './pages/Setup'
 import ComandeDisplay from './pages/ComandeDisplay'
 import EditorStampe from './pages/EditorStampe'
 import { ToastProvider } from './components/Toast'
+import { migraLocalStorage } from './lib/config'
+import { loadStampaConfig } from './lib/stampa'
+import { fsConfirm } from './lib/fullscreen'
 import './index.css'
 
 const PAGES = ['cassa', 'statistiche', 'magazzino', 'setup', 'stampe', 'comande']
@@ -31,6 +34,11 @@ export default function App() {
   const [page, setPage] = useState('cassa')
   const utente = { id: null, nome: 'Cassa 1', postazione: 'Cassa', ruolo: 'cassiere' }
 
+  // All'avvio: migra eventuali impostazioni da localStorage al DB e precarica config stampa
+  useEffect(() => {
+    migraLocalStorage().then(() => loadStampaConfig()).catch(console.error)
+  }, [])
+
   return (
     <ToastProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -48,10 +56,8 @@ export default function App() {
           <button
             title="Spegni la cassa"
             onClick={() => {
-              if (!confirm('Spegnere la cassa?')) return
-              fetch(`http://${window.location.hostname}:8091/shutdown/`)
-                .catch(() => {})
-              setTimeout(() => window.close(), 500)
+              if (!fsConfirm('Spegnere la cassa?')) return
+              window.close()
             }}
             style={{ marginLeft: 8, padding: '3px 10px', background: 'var(--red)',
               color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer',

@@ -1,10 +1,25 @@
 // Sistema stampa unificato - tutto in una finestra, una sola conferma
+import { getConf, setConf } from './config'
+
+// Cache sincrona in memoria (per le funzioni di stampa che sono sync)
+let _stampaCfgCache = null
+
+export async function loadStampaConfig() {
+  _stampaCfgCache = await getConf('cassa_stampa_config', {})
+  return _stampaCfgCache
+}
 
 export function getConfig() {
+  // Se cache presente, usa quella (dal DB)
+  if (_stampaCfgCache !== null) return _stampaCfgCache
+  // Fallback localStorage per retrocompatibilità
   try { return JSON.parse(localStorage.getItem('cassa_stampa_config') || '{}') } catch { return {} }
 }
-export function saveConfig(cfg) {
+
+export async function saveConfig(cfg) {
+  _stampaCfgCache = cfg
   localStorage.setItem('cassa_stampa_config', JSON.stringify(cfg))
+  await setConf('cassa_stampa_config', cfg)
 }
 
 // Genera HTML scontrino
@@ -106,6 +121,43 @@ function htmlComanda(nomeComanda, righe, scontrino, cfg) {
     </div>`
 }
 
+// Helper: stampa tramite iframe nascosto + ripristina fullscreen dopo
+function printViaIframe(html) {
+  const wasFullscreen = !!document.fullscreenElement
+
+  // Rimuovi iframe precedente se esiste
+  const old = document.getElementById('_print_frame')
+  if (old) old.remove()
+
+  const iframe = document.createElement('iframe')
+  iframe.id = '_print_frame'
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;'
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document
+  doc.open()
+  doc.write(html)
+  doc.close()
+
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+    } catch (e) {
+      console.error('Errore stampa iframe:', e)
+    }
+    // Dopo la stampa, ripristina fullscreen se era attivo
+    if (wasFullscreen) {
+      setTimeout(() => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {})
+        }
+      }, 500)
+    }
+    setTimeout(() => iframe.remove(), 5000)
+  }
+}
+
 // STAMPA TUTTO IN UNA FINESTRA - una sola conferma
 export function stampaTutto(scontrino, righeScontrino, comande, righePerComanda, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
@@ -140,18 +192,10 @@ export function stampaTutto(scontrino, righeScontrino, comande, righePerComanda,
       td, th { padding: 1px 2px; }
       hr { margin: 3px 0; }
     </style></head>
-    <body>${sezioni.join('\
-')}</body>
+    <body>${sezioni.join('\n')}</body>
     </html>`
 
-  const w = window.open('', '_blank', 'width=400,height=600')
-  if (!w) {
-    alert('Il browser ha bloccato la finestra di stampa. Abilita i popup per questo sito.')
-    return
-  }
-  w.document.write(html)
-  w.document.close()
-  w.onload = () => { w.print() }
+  printViaIframe(html)
 }
 
 // Compat: stampa solo scontrino
@@ -159,20 +203,12 @@ export function stampaScontrino(scontrino, righe, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
   if (config.stampaScontrino === false) return
   const html = `<html><head><style>@page{margin:${config.marginePagina||2}mm}body{margin:0;padding:0}table{width:100%;border-collapse:collapse}</style></head><body>${htmlScontrino(scontrino, righe, config)}</body></html>`
-  const w = window.open('', '_blank', 'width=400,height=500')
-  if (!w) return
-  w.document.write(html)
-  w.document.close()
-  w.onload = () => w.print()
+  printViaIframe(html)
 }
 
 // Compat: stampa solo comanda
 export function stampaComanda(nomeComanda, righe, scontrino, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
   const html = `<html><head><style>@page{margin:${config.marginePagina||2}mm}body{margin:0;padding:0}table{width:100%;border-collapse:collapse}</style></head><body>${htmlComanda(nomeComanda, righe, scontrino, config)}</body></html>`
-  const w = window.open('', '_blank', 'width:400,height:500')
-  if (!w) return
-  w.document.write(html)
-  w.document.close()
-  w.onload = () => w.print()
+  printViaIframe(html)
 }

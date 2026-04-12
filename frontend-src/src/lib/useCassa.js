@@ -53,6 +53,7 @@ export function useCassa() {
         _prodotto_id: prodotto.id,
         _tipo: 'prodotto',
         _famId: prodotto.famiglia,
+        _ingredienti: Array.isArray(prodotto.ingredienti) ? prodotto.ingredienti : [],
         prodotto: prodotto.id,
         menu: null,
         nome_snapshot: prodotto.nome,
@@ -179,7 +180,8 @@ export function useCassa() {
 
       // Stampa unificata: scontrino + tutte le comande in una sola finestra
       try {
-        const cfg = JSON.parse(localStorage.getItem('cassa_stampa_config') || '{}')
+        const { getConfig } = await import('./stampa')
+        const cfg = getConfig()
         const comande = await pb.collection('comande').getFullList({ filter: 'abilitata=true', sort: 'ordine,nome' })
         const scForPrint = { ...sc, tavolo: tavolo?.numero || null }
 

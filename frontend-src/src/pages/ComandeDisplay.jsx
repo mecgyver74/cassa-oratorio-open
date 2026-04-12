@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import pb from '../lib/pb'
+import { getConf, setConf } from '../lib/config'
 
 // ── QR Modal ─────────────────────────────────────────────────
 function QrModal({ onClose }) {
@@ -48,30 +49,39 @@ export default function ComandeDisplay() {
   const [qrOpen, setQrOpen]       = useState(false)
   const [dbPronteOk, setDbPronteOk] = useState(true)
 
-  // Preferenze persistenti in localStorage
-  const [filtroComande, setFiltroComande] = useState(() => {
-    try {
-      const saved = localStorage.getItem('comande_filtro')
-      return saved ? new Set(JSON.parse(saved)) : new Set()
-    } catch { return new Set() }
-  })
-  const [ordineInvertito, setOrdineInvertito] = useState(() => {
-    return localStorage.getItem('comande_ordine') === '1'
-  })
-  const [vista, setVista] = useState(() => {
-    return localStorage.getItem('comande_vista') || 'comande'
-  })
+  // Preferenze persistenti nel database
+  const [filtroComande, setFiltroComande] = useState(new Set())
+  const [ordineInvertito, setOrdineInvertito] = useState(false)
+  const [vista, setVista] = useState('comande')
+  const [prefLoaded, setPrefLoaded] = useState(false)
 
-  // Salva preferenze quando cambiano
+  // Carica preferenze dal DB all'avvio
   useEffect(() => {
-    localStorage.setItem('comande_filtro', JSON.stringify([...filtroComande]))
-  }, [filtroComande])
+    Promise.all([
+      getConf('comande_filtro', []),
+      getConf('comande_ordine', false),
+      getConf('comande_vista', 'comande'),
+    ]).then(([filtro, ordine, v]) => {
+      if (Array.isArray(filtro) && filtro.length > 0) setFiltroComande(new Set(filtro))
+      setOrdineInvertito(!!ordine)
+      setVista(v || 'comande')
+      setPrefLoaded(true)
+    })
+  }, [])
+
+  // Salva preferenze quando cambiano (solo dopo il caricamento iniziale)
   useEffect(() => {
-    localStorage.setItem('comande_ordine', ordineInvertito ? '1' : '0')
-  }, [ordineInvertito])
+    if (!prefLoaded) return
+    setConf('comande_filtro', [...filtroComande])
+  }, [filtroComande, prefLoaded])
   useEffect(() => {
-    localStorage.setItem('comande_vista', vista)
-  }, [vista])
+    if (!prefLoaded) return
+    setConf('comande_ordine', ordineInvertito)
+  }, [ordineInvertito, prefLoaded])
+  useEffect(() => {
+    if (!prefLoaded) return
+    setConf('comande_vista', vista)
+  }, [vista, prefLoaded])
 
   // ── Caricamento ──────────────────────────────────────────────
   const carica = useCallback(async () => {

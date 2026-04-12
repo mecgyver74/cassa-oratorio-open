@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import pb from '../lib/pb'
-import { stampaScontrino } from '../lib/stampa'
+import { stampaTutto, getConfig } from '../lib/stampa'
+import { fsConfirm, fsPrompt } from '../lib/fullscreen'
 
 const EUR = v => '€ ' + Number(v).toFixed(2).replace('.', ',')
 
@@ -62,8 +63,8 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
 
   const handleStorno = async () => {
     if (!sel) return
-    if (!confirm(`Stornare lo scontrino #${String(sel.numero).padStart(4,'0')}?`)) return
-    const note = prompt('Note storno (facoltativo):') ?? ''
+    if (!fsConfirm(`Stornare lo scontrino #${String(sel.numero).padStart(4,'0')}?`)) return
+    const note = fsPrompt('Note storno (facoltativo):') ?? ''
     const res = await stornoScontrino(sel.id, note)
     if (res.ok) {
       toast('Scontrino stornato', 'r')
@@ -75,7 +76,7 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
   }
 
   const handleStornaRiga = async riga => {
-    if (!confirm(`Rimuovere "${riga.nome_snapshot}" dallo scontrino?`)) return
+    if (!fsConfirm(`Rimuovere "${riga.nome_snapshot}" dallo scontrino?`)) return
     try {
       await pb.collection('righe_scontrino').update(riga.id, { stornata: true })
       // Ricalcola totale
@@ -143,6 +144,37 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
       setSel(updated)
       caricaScontrini()
     } catch(e) { toast('Errore: ' + e.message, 'r') }
+  }
+
+  const ristampa = async (scontrino, righeScontrino) => {
+    try {
+      const cfg = getConfig()
+      const comande = await pb.collection('comande').getFullList({ filter: 'abilitata=true', sort: 'ordine,nome' })
+      const scForPrint = { ...scontrino, tavolo: scontrino.tavolo?.numero || null }
+
+      // Recupera famiglie per i prodotti nelle righe
+      const prodIds = righeScontrino.filter(r => r.prodotto).map(r => r.prodotto)
+      const prodotti = prodIds.length > 0 ? await pb.collection('prodotti').getFullList({ filter: prodIds.map(id => `id="${id}"`).join(' || ') }) : []
+      const prodMap = Object.fromEntries(prodotti.map(p => [p.id, p.famiglia]))
+
+      // Costruisci mappa righe per comanda
+      const righePerComanda = {}
+      for (const comanda of comande) {
+        let famIds = comanda.famiglie_ids || []
+        if (typeof famIds === 'string') { try { famIds = JSON.parse(famIds) } catch { famIds = [] } }
+        const righeC = righeScontrino
+          .filter(r => r.prodotto && famIds.includes(prodMap[r.prodotto]))
+          .map(r => ({
+            ...r,
+            totale_riga: r.omaggio ? 0 : (r.prezzo_snapshot * r.quantita)
+          }))
+        if (righeC.length > 0) righePerComanda[comanda.id] = righeC
+      }
+
+      // Una sola finestra con tutto - solo comande con invia_stampante=true
+      const comandeDaStampare = comande.filter(com => com.invia_stampante)
+      stampaTutto(scForPrint, righeScontrino, comandeDaStampare, righePerComanda, cfg)
+    } catch(e) { console.warn('Errore ristampa:', e) }
   }
 
   const filtrati = scontrini.filter(s =>
@@ -312,9 +344,9 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
                     <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column' }}>
                       <div style={{ fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14, marginBottom: 10, color: 'var(--blue)' }}>Ristampa</div>
                       <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5, flex: 1 }}>
-                        Ristampa lo scontrino con i dati attuali.
+                        Ristampa lo scontrino e le comande con i dati attuali.
                       </div>
-                      <button onClick={() => { if (righe.length === 0) { toast('Nessuna riga caricata', 'r'); return } stampaScontrino(sel, righe); toast('Ristampa avviata', 'b') }}
+                      <button onClick={async () => { if (righe.length === 0) { toast('Nessuna riga caricata', 'r'); return } await ristampa(sel, righe); toast('Ristampa avviata', 'b') }}
                         style={{ width: '100%', padding: 9, background: 'var(--blue)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                         🖨 Ristampa
                       </button>

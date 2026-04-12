@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import pb from '../lib/pb'
 import { useToast } from '../components/Toast'
+import { getConf, setConf, delConf } from '../lib/config'
+import { fsConfirm } from '../lib/fullscreen'
 
 export default function Setup() {
   const toast = useToast()
@@ -50,12 +52,13 @@ function TabProdotti({ toast }) {
 
   const selProd = (p) => {
     setSel(p.id)
-    setForm({ nome: p.nome, codice_pers: p.codice_pers||'', famiglia: p.famiglia, magazzino_comune: p.magazzino_comune||'', prezzo: p.prezzo, quantita: p.quantita, unita: p.unita||'pz', soglia_allarme: p.soglia_allarme||0, attivo: p.attivo, solo_menu: p.solo_menu, colore: p.colore||'', ordine: p.ordine||0, comanda: p.comanda||'' })
+    setForm({ nome: p.nome, codice_pers: p.codice_pers||'', famiglia: p.famiglia, magazzino_comune: p.magazzino_comune||'', prezzo: p.prezzo, quantita: p.quantita, unita: p.unita||'pz', soglia_allarme: p.soglia_allarme||0, attivo: p.attivo, solo_menu: p.solo_menu, colore: p.colore||'', ordine: p.ordine||0, comanda: p.comanda||'', ingredienti: Array.isArray(p.ingredienti) ? p.ingredienti.join(', ') : '' })
   }
 
   const salva = async () => {
     try {
-      const data = { ...form, prezzo: parseFloat(form.prezzo)||0, quantita: form.quantita===-1 ? -1 : parseFloat(form.quantita)||0, soglia_allarme: parseFloat(form.soglia_allarme)||0, ordine: parseInt(form.ordine)||0, magazzino_comune: form.magazzino_comune||null, comanda: form.comanda||null }
+      const ingredientiArr = (form.ingredienti || '').split(',').map(s => s.trim()).filter(Boolean)
+      const data = { ...form, prezzo: parseFloat(form.prezzo)||0, quantita: form.quantita===-1 ? -1 : parseFloat(form.quantita)||0, soglia_allarme: parseFloat(form.soglia_allarme)||0, ordine: parseInt(form.ordine)||0, magazzino_comune: form.magazzino_comune||null, comanda: form.comanda||null, ingredienti: ingredientiArr.length > 0 ? ingredientiArr : null }
       if (sel === 'new') await pb.collection('prodotti').create(data)
       else await pb.collection('prodotti').update(sel, data)
       toast('Salvato', 'v'); carica(); setSel(null)
@@ -63,7 +66,7 @@ function TabProdotti({ toast }) {
   }
 
   const elimina = async (id) => {
-    if (!confirm('Eliminare questo prodotto dal listino?')) return
+    if (!fsConfirm('Eliminare questo prodotto dal listino?')) return
     // Verifica se il prodotto è stato venduto
     try {
       pb.autoCancellation(false)
@@ -81,13 +84,13 @@ function TabProdotti({ toast }) {
     } catch(e) {
       pb.autoCancellation(true)
       // Se non riesci a verificare, procedi con conferma aggiuntiva
-      if (!confirm('Impossibile verificare se il prodotto è stato venduto. Eliminare comunque?')) return
+      if (!fsConfirm('Impossibile verificare se il prodotto è stato venduto. Eliminare comunque?')) return
     }
     await pb.collection('prodotti').delete(id).catch(e => toast(e.message,'r'))
     carica(); setSel(null)
   }
 
-  const nuovo = () => { setSel('new'); setForm({ nome:'', codice_pers:'', famiglia: famiglie[0]?.id||'', magazzino_comune:'', prezzo:'', quantita:0, unita:'pz', soglia_allarme:0, attivo:true, solo_menu:false, colore:'', ordine:0, comanda:'' }) }
+  const nuovo = () => { setSel('new'); setForm({ nome:'', codice_pers:'', famiglia: famiglie[0]?.id||'', magazzino_comune:'', prezzo:'', quantita:0, unita:'pz', soglia_allarme:0, attivo:true, solo_menu:false, colore:'', ordine:0, comanda:'', ingredienti:'' }) }
 
   return (
     <div className="setup-cols">
@@ -172,6 +175,7 @@ function TabProdotti({ toast }) {
               </select>
             </div>
             <div className="cb-row"><input type="checkbox" checked={!!form.attivo} onChange={e=>setForm(f=>({...f,attivo:e.target.checked}))}/> Attivo</div>
+            <div className="fg"><label>Ingredienti (separati da virgola)</label><input value={form.ingredienti||''} onChange={e=>setForm(f=>({...f,ingredienti:e.target.value}))} placeholder="es. insalata, pomodoro, formaggio, cipolla"/></div>
             <div className="cb-row"><input type="checkbox" checked={!!form.solo_menu} onChange={e=>setForm(f=>({...f,solo_menu:e.target.checked}))}/> Solo nei menù (non visibile in cassa)</div>
             <button className="btn-salva" onClick={salva}>Salva</button>
           </div>
@@ -200,7 +204,7 @@ function TabFamiglie({ toast }) {
       toast('Salvato','v'); carica(); setSel(null)
     } catch(e) { toast(e.message,'r') }
   }
-  const elimina = async id => { if(!confirm('Eliminare?')) return; await pb.collection('famiglie').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
+  const elimina = async id => { if(!fsConfirm('Eliminare?')) return; await pb.collection('famiglie').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
   const nuovo = () => { setSel('new'); setForm({nome:'',codice:'',colore:'#888888',attivo:true,ordine:0}) }
 
   return (
@@ -251,7 +255,7 @@ function TabMagComuni({ toast }) {
       toast('Salvato','v'); carica(); setSel(null)
     } catch(e) { toast(e.message,'r') }
   }
-  const elimina = async id => { if(!confirm('Eliminare?')) return; await pb.collection('magazzini_comuni').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
+  const elimina = async id => { if(!fsConfirm('Eliminare?')) return; await pb.collection('magazzini_comuni').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
   const nuovo = () => { setSel('new'); setForm({nome:'',quantita:0,soglia_allarme:5}) }
   return (
     <div className="setup-cols">
@@ -301,7 +305,7 @@ function TabComande({ toast }) {
       toast('Salvato','v'); carica(); setSel(null)
     } catch(e) { toast(e.message,'r') }
   }
-  const elimina = async id => { if(!confirm('Eliminare?')) return; await pb.collection('comande').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
+  const elimina = async id => { if(!fsConfirm('Eliminare?')) return; await pb.collection('comande').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
   const nuovo = () => { setSel('new'); setForm({nome:'',abilitata:true,stampante:'',copie:1,salva_su_db:true,invia_stampante:false,famiglie_ids:[],ordine:0}) }
   const toggleFam = fid => {
     setForm(f => ({ ...f, famiglie_ids: f.famiglie_ids.includes(fid) ? f.famiglie_ids.filter(x=>x!==fid) : [...f.famiglie_ids, fid] }))
@@ -364,7 +368,7 @@ function TabMenu({ toast }) {
       toast('Salvato','v'); carica(); setSel(null)
     } catch(e){toast(e.message,'r')}
   }
-  const elimina = async id => { if(!confirm('Eliminare il menù e i suoi componenti?')) return; await pb.collection('menu').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
+  const elimina = async id => { if(!fsConfirm('Eliminare il menù e i suoi componenti?')) return; await pb.collection('menu').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
   const nuovo = () => { setSel('new'); setForm({nome:'',prezzo:'',colore:'',attivo:true,ordine:0}) }
   return (
     <div className="setup-cols">
@@ -415,7 +419,7 @@ function TabUtenti({ toast }) {
       toast('Salvato','v'); carica(); setSel(null)
     } catch(e){toast(e.message,'r')}
   }
-  const elimina = async id => { if(!confirm('Eliminare?')) return; await pb.collection('utenti').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
+  const elimina = async id => { if(!fsConfirm('Eliminare?')) return; await pb.collection('utenti').delete(id).catch(e=>toast(e.message,'r')); carica(); setSel(null) }
   const nuovo = () => { setSel('new'); setForm({nome:'',postazione:'',ruolo:'cassiere',pin:'',attivo:true}) }
   return (
     <div className="setup-cols">
@@ -456,18 +460,19 @@ function TabUtenti({ toast }) {
 
 // ── TAB ASPETTO ────────────────────────────────────────────────────────────
 function TabDisplay({ toast }) {
-  const load = () => {
-    try { return JSON.parse(localStorage.getItem('cassa_display') || '{}') } catch { return {} }
-  }
-  const [cfg, setCfg] = useState(load)
+  const [cfg, setCfg] = useState({})
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => { getConf('cassa_display', {}).then(c => { setCfg(c); setLoaded(true) }) }, [])
 
   const set = (k, v) => {
     const n = { ...cfg, [k]: v }
     setCfg(n)
-    localStorage.setItem('cassa_display', JSON.stringify(n))
+    setConf('cassa_display', n)
   }
 
   const reset = () => {
+    delConf('cassa_display')
     localStorage.removeItem('cassa_display')
     setCfg({})
     toast('Impostazioni ripristinate', 'b')

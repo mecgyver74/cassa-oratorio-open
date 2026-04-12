@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '../components/Toast'
 import pb from '../lib/pb'
+import { fsConfirm, ripristinaFullscreen } from '../lib/fullscreen'
 
 const EUR = v => '€ ' + Number(v).toFixed(2).replace('.', ',')
 
@@ -22,7 +23,7 @@ export default function Statistiche() {
     const msg = tutto
       ? 'Eliminare TUTTI gli scontrini? Questa operazione è irreversibile!'
       : `Eliminare tutti gli scontrini dal ${dal} al ${al}? Operazione irreversibile!`
-    if (!confirm(msg)) return
+    if (!fsConfirm(msg)) return
     setEliminando(true)
     try {
       pb.autoCancellation(false)
@@ -83,8 +84,8 @@ export default function Statistiche() {
 
   // STAMPA
   const stampa = () => {
-    const w = window.open('', '_blank')
-    w.document.write(`
+    const wasFs = !!document.fullscreenElement
+    const html = `
       <html><head><title>Statistiche ${dal} - ${al}</title>
       <style>
         body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
@@ -115,9 +116,21 @@ export default function Statistiche() {
         ${venduto.map(v => `<tr><td>${v.nome}</td><td>${v.qta}</td><td>${v.omaggi||'-'}</td><td><b>${EUR(v.tot)}</b></td></tr>`).join('')}
         <tr style="background:#f9f9f9;font-weight:bold"><td>TOTALE</td><td>${venduto.reduce((s,v)=>s+v.qta,0)}</td><td></td><td>${EUR(incasso)}</td></tr>
       </tbody></table>
-      <script>window.print(); setTimeout(()=>window.close(),1000)</script>
-      </body></html>`)
-    w.document.close()
+      </body></html>`
+    const oldFrame = document.getElementById('_print_stats')
+    if (oldFrame) oldFrame.remove()
+    const iframe = document.createElement('iframe')
+    iframe.id = '_print_stats'
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentDocument || iframe.contentWindow.document
+    doc.open(); doc.write(html); doc.close()
+    iframe.onload = () => {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+      if (wasFs) ripristinaFullscreen()
+      setTimeout(() => iframe.remove(), 5000)
+    }
   }
 
   // EXPORT XLSX

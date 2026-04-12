@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from 'react'
-import { getConfig, saveConfig } from '../lib/stampa'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { getConfig, saveConfig, loadStampaConfig } from '../lib/stampa'
 import { useToast } from '../components/Toast'
+import { fsConfirm } from '../lib/fullscreen'
 
 const FONTS = [
   "'Courier New', monospace",
@@ -136,6 +137,9 @@ export default function EditorStampe() {
   const [cfg, setCfg] = useState(() => getConfig())
   const [tab, setTab] = useState('scontrino')
 
+  // Ricarica dal DB se la cache sync era vuota
+  useEffect(() => { loadStampaConfig().then(c => { if (c && Object.keys(c).length > 0) setCfg(c) }) }, [])
+
   const set = (k, v) => setCfg(prev => ({ ...prev, [k]: v }))
 
   const salva = () => {
@@ -144,7 +148,7 @@ export default function EditorStampe() {
   }
 
   const reset = () => {
-    if (!confirm('Ripristinare le impostazioni predefinite?')) return
+    if (!fsConfirm('Ripristinare le impostazioni predefinite?')) return
     const def = {}
     saveConfig(def)
     setCfg(def)
