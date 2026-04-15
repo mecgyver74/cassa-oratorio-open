@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import pb from '../lib/pb'
 import { useCassa } from '../lib/useCassa'
 import ModalePagamento from '../components/ModalePagamento'
 import ModaleStorico from '../components/ModaleStorico'
 import { useToast } from '../components/Toast'
+import { getConf, setConf } from '../lib/config'
+import { fsPrompt } from '../lib/fullscreen'
 
 const EUR = v => '€ ' + Number(v).toFixed(2).replace('.', ',')
 
@@ -19,13 +21,25 @@ export default function Cassa({ utente }) {
   const [pagOpen, setPagOpen] = useState(false)
   const [storicoOpen, setStoricoOpen] = useState(false)
   const [nextNum, setNextNum] = useState('—')
+  const [asporto, setAsporto] = useState(false)
   const [scontoV, setScontoV] = useState('')
   const [scontoT, setScontoT] = useState('€')
+  const [ingDropKey, setIngDropKey] = useState(null) // key della riga con dropdown ingredienti aperto
+  const [pendingSplitProd, setPendingSplitProd] = useState(null) // prodotto_id appena splittato
 
-  // Impostazioni aspetto pulsanti (da Setup → Aspetto)
-  const dispCfg = (() => {
-    try { return JSON.parse(localStorage.getItem('cassa_display') || '{}') } catch { return {} }
-  })()
+  // Dopo uno split, apri il dropdown sulla nuova riga creata
+  useEffect(() => {
+    if (!pendingSplitProd) return
+    const nuova = cassa.righe.find(x => x._prodotto_id === pendingSplitProd && x.quantita === 1 && !x.note)
+    if (nuova) {
+      setIngDropKey(nuova._key)
+      setPendingSplitProd(null)
+    }
+  }, [cassa.righe, pendingSplitProd])
+
+  // Impostazioni aspetto pulsanti (da Setup → Aspetto) — caricati dal DB
+  const [dispCfg, setDispCfg] = useState({})
+  useEffect(() => { getConf('cassa_display', {}).then(setDispCfg) }, [])
   const nomeFontSize   = dispCfg.nomeFontSize   ?? 14
   const prezzoFontSize = dispCfg.prezzoFontSize ?? 12
   const btnHeight      = dispCfg.btnHeight      ?? 90
@@ -37,13 +51,13 @@ export default function Cassa({ utente }) {
   const colGiacenza    = dispCfg.colGiacenza    ?? '#ffffffaa'
 
   // Divisore trascinabile
-  const [scontrWidth, setScontrWidth] = useState(() => {
-    const saved = parseInt(localStorage.getItem('cassa_scont_width') || '0')
-    return saved >= 280 ? saved : 340
-  })
+  const [scontrWidth, setScontrWidth] = useState(340)
   const dragging = useRef(false)
   const startX = useRef(0)
   const startW = useRef(0)
+
+  // Carica larghezza scontrino dal DB
+  useEffect(() => { getConf('cassa_scont_width', 340).then(v => { if (v >= 280) setScontrWidth(v) }) }, [])
 
   const startDrag = useCallback(e => {
     dragging.current = true
@@ -62,6 +76,7 @@ export default function Cassa({ utente }) {
       if (dragging.current) {
         dragging.current = false
         localStorage.setItem('cassa_scont_width', String(scontrWidth))
+        setConf('cassa_scont_width', scontrWidth)
       }
     }
     window.addEventListener('mousemove', onMove)
@@ -119,11 +134,13 @@ export default function Cassa({ utente }) {
   }
 
   const handlePaga = async (params) => {
-    const res = await cassa.pagaeSalva({ ...params, utente })
+    const res = await cassa.pagaeSalva({ ...params, utente, asporto })
     if (res.ok) {
       toast(`Scontrino #${res.numero} pagato`, 'v')
       setNextNum(res.numero + 1)
       setPagOpen(false)
+      setAsporto(false)
+      setScontoV('')
       ricaricaProdotti()
     } else {
       toast('Errore: ' + res.error, 'r')
@@ -131,7 +148,7 @@ export default function Cassa({ utente }) {
   }
 
   const handleStorno = async () => {
-    const note = prompt('Note storno (opzionale):') ?? ''
+    const note = fsPrompt('Note storno (opzionale):') ?? ''
     const ultimi = await pb.collection('scontrini').getList(1, 1, { sort: '-numero', filter: 'stornato=false' }).catch(() => ({ items: [] }))
     if (!ultimi.items.length) { toast('Nessuno scontrino da stornare', 'r'); return }
     const res = await cassa.stornoScontrino(ultimi.items[0].id, note)
@@ -143,20 +160,37 @@ export default function Cassa({ utente }) {
   const sconto = cassa.getScontoCalcolato()
   const totale = cassa.getTotale()
 
+  // Righe scontrino ordinate per famiglia (stesso ordine della cassa)
+  const righeOrdinate = useMemo(() => {
+    if (cassa.righe.length === 0 || famiglie.length === 0) return cassa.righe
+    const famOrdine = {}
+    famiglie.forEach((f, i) => { famOrdine[f.id] = i })
+    return [...cassa.righe].sort((a, b) => {
+      const oa = famOrdine[a._famId] ?? 999
+      const ob = famOrdine[b._famId] ?? 999
+      if (oa !== ob) return oa - ob
+      // Stessa famiglia: ordine nome prodotto
+      return (a.nome_snapshot || '').localeCompare(b.nome_snapshot || '')
+    })
+  }, [cassa.righe, famiglie])
+
   // Prodotti raggruppati per famiglia (quando "Tutti")
   const renderProdotti = () => {
     if (famSel !== 0) {
+      // Mostra solo se la famiglia selezionata è attiva
+      const famAttiva = famiglie.find(f => f.id === famSel)
+      if (!famAttiva) return null
       const filtered = prodotti.filter(p => p.famiglia === famSel && !p.solo_menu)
       return renderGriglia(filtered)
     }
-    // Raggruppa per famiglia nell'ordine delle famiglie
+    // Raggruppa per famiglia nell'ordine delle famiglie (solo famiglie attive)
+    const famIds = new Set(famiglie.map(f => f.id))
     const famConProdotti = famiglie.map(f => ({
       fam: f,
       prods: prodotti.filter(p => p.famiglia === f.id && !p.solo_menu)
     })).filter(g => g.prods.length > 0)
-    // Prodotti senza famiglia
-    const famIds = new Set(famiglie.map(f => f.id))
-    const senzaFam = prodotti.filter(p => !famIds.has(p.famiglia) && !p.solo_menu)
+    // Prodotti senza famiglia (nascosti se la famiglia è disattivata)
+    const senzaFam = prodotti.filter(p => !p.famiglia && !p.solo_menu)
 
     return (
       <>
@@ -198,7 +232,7 @@ export default function Cassa({ utente }) {
         style={{ background: bgColor, boxShadow: `0 3px 10px ${bgColor}44`,
           height: btnHeight, minHeight: btnHeight,
           width: btnWidth, minWidth: btnWidth }}
-        onClick={() => { if (!esaurito) { cassa.addProdotto(p); toast('+' + p.nome, 'v') } }}>
+        onClick={() => { if (!esaurito) { cassa.addProdotto(p, msg => toast(msg, 'r')) } }}>
         <div className="pn" style={{ fontSize: nomeFontSize, color: colNome }}>{p.nome}</div>
         <div className="pp" style={{ fontSize: prezzoFontSize, color: colPrezzo }}>{EUR(p.prezzo)}</div>
         <div className={`ps ${sc.low ? 'low' : ''}`} style={{ color: colGiacenza }}>
@@ -268,28 +302,101 @@ export default function Cassa({ utente }) {
           <h2>Scontrino</h2>
           <span className="scont-num">#{String(nextNum).padStart(4,'0')}</span>
           <button className="scont-tavolo-btn" onClick={() => {
-            const t = prompt('Numero tavolo:'); if (t) cassa.setTavolo({ id: null, numero: t })
+            const t = fsPrompt('Tavolo o nome cliente:'); if (t) cassa.setTavolo({ id: null, numero: t })
           }}>
-            {cassa.tavolo ? `T.${cassa.tavolo.numero}` : '+ Tavolo'}
+            {cassa.tavolo ? `T.${cassa.tavolo.numero}` : '+ Tavolo/Nome'}
+          </button>
+          <button className="scont-tavolo-btn" onClick={() => setAsporto(a => !a)}
+            style={{ background: asporto ? '#f59e0b' : '', color: asporto ? '#000' : '',
+              fontWeight: asporto ? 800 : 400 }}>
+            {asporto ? '🥡 Asporto' : '🥡'}
           </button>
         </div>
 
         <div className="righe-scont">
-          {cassa.righe.length === 0
+          {righeOrdinate.length === 0
             ? <div className="riga-vuota">Seleziona prodotti →</div>
-            : cassa.righe.map(r => (
+            : righeOrdinate.map(r => (
               <div key={r._key} className={`riga ${r.omaggio ? 'omaggio' : ''}`}>
-                <div className="riga-info">
+                <div className="riga-info" style={{ position: 'relative' }}>
                   <div className="riga-nome"
                     onDoubleClick={() => {
-                      const n = prompt('Nota per questa riga:', r.note || '')
+                      const n = fsPrompt('Nota per questa riga:', r.note || '')
                       if (n !== null) cassa.setNoteRiga(r._key, n)
                     }}
                     title="Doppio click per aggiungere nota"
                   >
                     {r.nome_snapshot}
                     {r.note && <span style={{ fontSize:10, color:'var(--accent)', marginLeft:4 }}>📝</span>}
+                    {r._ingredienti && r._ingredienti.length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (r.quantita > 1) {
+                            cassa.splitRiga(r._key)
+                            setPendingSplitProd(r._prodotto_id)
+                          } else {
+                            setIngDropKey(ingDropKey === r._key ? null : r._key)
+                          }
+                        }}
+                        style={{ marginLeft: 4, padding: '0 4px', fontSize: 11, background: r.note && r.note.includes('no ') ? '#fef3c7' : 'var(--surf2)',
+                          border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', color: 'var(--text2)', verticalAlign: 'middle' }}
+                        title={r.quantita > 1 ? "Separa 1 unità per personalizzare" : "Personalizza ingredienti"}
+                      >🔧</button>
+                    )}
                   </div>
+                  {/* Dropdown ingredienti */}
+                  {ingDropKey === r._key && r._ingredienti && r._ingredienti.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, zIndex: 50,
+                      background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 8,
+                      boxShadow: '0 8px 24px rgba(0,0,0,.15)', padding: '6px 0', minWidth: 180,
+                    }}>
+                      <div style={{ padding: '4px 12px', fontSize: 11, color: 'var(--text3)', fontWeight: 700, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+                        Escludi ingredienti:
+                      </div>
+                      {r._ingredienti.map(ing => {
+                        const noteAttuali = r.note || ''
+                        const escluso = noteAttuali.toLowerCase().includes('no ' + ing.toLowerCase())
+                        return (
+                          <div key={ing}
+                            onClick={() => {
+                              let note = noteAttuali
+                              if (escluso) {
+                                // Rimuovi "no ingrediente" dalla nota
+                                note = note.replace(new RegExp(',?\\s*no ' + ing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '').replace(/^,\s*/, '').trim()
+                              } else {
+                                // Aggiungi "no ingrediente"
+                                note = note ? note + ', no ' + ing : 'no ' + ing
+                              }
+                              cassa.setNoteRiga(r._key, note)
+                            }}
+                            style={{
+                              padding: '5px 12px', cursor: 'pointer', fontSize: 13,
+                              display: 'flex', alignItems: 'center', gap: 8,
+                              background: escluso ? '#fef2f2' : 'transparent',
+                            }}
+                          >
+                            <span style={{ width: 16, height: 16, borderRadius: 3, border: '1.5px solid var(--border)',
+                              background: escluso ? 'var(--red)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: '#fff', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                              {escluso ? '✕' : ''}
+                            </span>
+                            <span style={{ textDecoration: escluso ? 'line-through' : 'none', color: escluso ? 'var(--red)' : 'var(--text)' }}>
+                              {ing}
+                            </span>
+                          </div>
+                        )
+                      })}
+                      <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, padding: '4px 12px' }}>
+                        <button onClick={() => setIngDropKey(null)}
+                          style={{ width: '100%', padding: '4px 0', background: 'var(--surf2)', border: '1px solid var(--border)',
+                            borderRadius: 4, cursor: 'pointer', fontSize: 12, color: 'var(--text2)' }}>
+                          Chiudi
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="riga-sub">{EUR(r.prezzo_snapshot)} / {r.unita}
                     {r.note && <span style={{ display:'block', fontSize:10, color:'var(--text2)', fontStyle:'italic' }}>{r.note}</span>}
                   </div>
@@ -297,7 +404,7 @@ export default function Cassa({ utente }) {
                 <div className="riga-qta">
                   <button className="qta-btn" onClick={() => cassa.setQuantita(r._key, r.quantita - 1)}>−</button>
                   <span className="qta-val">{r.quantita}</span>
-                  <button className="qta-btn" onClick={() => cassa.setQuantita(r._key, r.quantita + 1)}>+</button>
+                  <button className="qta-btn" onClick={() => { const p = prodotti.find(x => x.id === r._prodotto_id); cassa.setQuantita(r._key, r.quantita + 1, p?.quantita, msg => toast(msg, 'r')) }}>+</button>
                 </div>
                 <div className={`riga-tot ${r.omaggio ? 'omaggio-tot' : ''}`}>
                   {r.omaggio ? 'omaggio' : EUR(r.prezzo_snapshot * r.quantita)}

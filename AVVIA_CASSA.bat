@@ -15,4 +15,5 @@ echo Avvio Cassa Oratorio...
 
 echo.
 echo Cassa spenta.
+pause
 exit

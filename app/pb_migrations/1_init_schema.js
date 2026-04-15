@@ -139,15 +139,16 @@ migrate((app) => {
       { type: "relation", name: "tavolo",
         collectionId: tavoli.id,  maxSelect: 1, cascadeDelete: false },
       { type: "text",     name: "note" },
-      { type: "number",   name: "totale_lordo",   required: true },
+      { type: "number",   name: "totale_lordo" },
       { type: "number",   name: "sconto_perc" },
       { type: "number",   name: "sconto_euro" },
-      { type: "number",   name: "totale_netto",   required: true },
+      { type: "number",   name: "totale_netto" },
       { type: "select",   name: "tipo_pagamento",
         values: ["contanti","carta","omaggio"] },
       { type: "number",   name: "pagato" },
       { type: "number",   name: "resto" },
       { type: "bool",     name: "stornato" },
+      { type: "bool",     name: "asporto" },
       { type: "date",     name: "data_storno" },
       { type: "text",     name: "note_storno" },
     ],
@@ -200,6 +201,18 @@ migrate((app) => {
   adminRecord.set("attivo", true)
   app.save(adminRecord)
 
+
+  // ── righe_pronte ───────────────────────────────────────────────────
+  const righePronte = new Collection({
+    name: "righe_pronte",
+    type: "base",
+    fields: [
+      { name: "riga_id",    type: "text", required: true },
+      { name: "comanda_id", type: "text", required: true },
+      { name: "pronta_at",  type: "date" },
+    ],
+  })
+  app.save(righePronte)
 
   // ── comande_evase ──────────────────────────────────────────────────
   const comandeEvase = new Collection({

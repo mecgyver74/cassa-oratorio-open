@@ -1,10 +1,25 @@
 // Sistema stampa unificato - tutto in una finestra, una sola conferma
+import { getConf, setConf } from './config'
+
+// Cache sincrona in memoria (per le funzioni di stampa che sono sync)
+let _stampaCfgCache = null
+
+export async function loadStampaConfig() {
+  _stampaCfgCache = await getConf('cassa_stampa_config', {})
+  return _stampaCfgCache
+}
 
 export function getConfig() {
+  // Se cache presente, usa quella (dal DB)
+  if (_stampaCfgCache !== null) return _stampaCfgCache
+  // Fallback localStorage per retrocompatibilità
   try { return JSON.parse(localStorage.getItem('cassa_stampa_config') || '{}') } catch { return {} }
 }
-export function saveConfig(cfg) {
+
+export async function saveConfig(cfg) {
+  _stampaCfgCache = cfg
   localStorage.setItem('cassa_stampa_config', JSON.stringify(cfg))
+  await setConf('cassa_stampa_config', cfg)
 }
 
 // Genera HTML scontrino
@@ -46,7 +61,8 @@ function htmlScontrino(scontrino, righe, cfg) {
       ${mostraData ? `<div>Data: ${new Date(scontrino.data_ora).toLocaleString('it-IT')}</div>` : ''}
       <div>Scontrino n. ${String(scontrino.numero).padStart(4,'0')}</div>
       ${mostraCassa && scontrino.postazione ? `<div>Cassa: ${scontrino.postazione}</div>` : ''}
-      ${scontrino.tavolo ? `<div style="font-weight:bold">Tavolo: ${scontrino.tavolo}</div>` : ''}
+      ${scontrino.asporto ? `<div style="font-weight:bold;font-size:1.2em;text-align:center;border:2px solid #000;padding:2px">*** ASPORTO ***</div>` : ''}
+      ${scontrino.tavolo ? `<div style="font-weight:bold">Tavolo/Nome: ${scontrino.tavolo}</div>` : ''}
       ${scontrino.note ? `<div>Note: ${scontrino.note}</div>` : ''}
       <hr style="border:none;border-top:1px dashed #000;margin:4px 0">
       <table style="width:100%;border-collapse:collapse">
@@ -95,13 +111,51 @@ function htmlComanda(nomeComanda, righe, scontrino, cfg) {
       </div>
       ${mostraNumero ? `<div style="font-weight:bold;font-size:${fontSizeComanda}px">Scontrino #${String(scontrino.numero).padStart(4,'0')}</div>` : ''}
       ${mostraOrario ? `<div style="font-size:${fontSizeComanda}px">${new Date(scontrino.data_ora).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
-      ${mostraTavolo && scontrino.tavolo ? `<div style="font-size:${fontSizeComanda+4}px;font-weight:900;border-bottom:2px solid #000">TAVOLO ${scontrino.tavolo}</div>` : ''}
+      ${scontrino.asporto ? `<div style="font-size:${fontSizeComanda+4}px;font-weight:900;border:2px solid #000;text-align:center">*** ASPORTO ***</div>` : ''}
+      ${mostraTavolo && scontrino.tavolo ? `<div style="font-size:${fontSizeComanda+4}px;font-weight:900;border-bottom:2px solid #000">TAVOLO/NOME ${scontrino.tavolo}</div>` : ''}
       ${scontrino.note ? `<div style="font-size:${fontSizeComanda-1}px;font-style:italic">Note: ${scontrino.note}</div>` : ''}
       <hr style="border:none;border-top:2px solid #000;margin:4px 0">
       <table style="width:100%;border-collapse:collapse"><tbody>${righeHtml}</tbody></table>
       <hr style="border:none;border-top:1px dashed #000;margin:4px 0">
       <div style="font-size:9px;text-align:right">${new Date().toLocaleString('it-IT')}</div>
     </div>`
+}
+
+// Helper: stampa tramite iframe nascosto + ripristina fullscreen dopo
+function printViaIframe(html) {
+  const wasFullscreen = !!document.fullscreenElement
+
+  // Rimuovi iframe precedente se esiste
+  const old = document.getElementById('_print_frame')
+  if (old) old.remove()
+
+  const iframe = document.createElement('iframe')
+  iframe.id = '_print_frame'
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;'
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document
+  doc.open()
+  doc.write(html)
+  doc.close()
+
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+    } catch (e) {
+      console.error('Errore stampa iframe:', e)
+    }
+    // Dopo la stampa, ripristina fullscreen se era attivo
+    if (wasFullscreen) {
+      setTimeout(() => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {})
+        }
+      }, 500)
+    }
+    setTimeout(() => iframe.remove(), 5000)
+  }
 }
 
 // STAMPA TUTTO IN UNA FINESTRA - una sola conferma
@@ -138,18 +192,10 @@ export function stampaTutto(scontrino, righeScontrino, comande, righePerComanda,
       td, th { padding: 1px 2px; }
       hr { margin: 3px 0; }
     </style></head>
-    <body>${sezioni.join('\
-')}</body>
+    <body>${sezioni.join('\n')}</body>
     </html>`
 
-  const w = window.open('', '_blank', 'width=400,height=600')
-  if (!w) {
-    alert('Il browser ha bloccato la finestra di stampa. Abilita i popup per questo sito.')
-    return
-  }
-  w.document.write(html)
-  w.document.close()
-  w.onload = () => { w.print() }
+  printViaIframe(html)
 }
 
 // Compat: stampa solo scontrino
@@ -157,20 +203,12 @@ export function stampaScontrino(scontrino, righe, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
   if (config.stampaScontrino === false) return
   const html = `<html><head><style>@page{margin:${config.marginePagina||2}mm}body{margin:0;padding:0}table{width:100%;border-collapse:collapse}</style></head><body>${htmlScontrino(scontrino, righe, config)}</body></html>`
-  const w = window.open('', '_blank', 'width=400,height=500')
-  if (!w) return
-  w.document.write(html)
-  w.document.close()
-  w.onload = () => w.print()
+  printViaIframe(html)
 }
 
 // Compat: stampa solo comanda
 export function stampaComanda(nomeComanda, righe, scontrino, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
   const html = `<html><head><style>@page{margin:${config.marginePagina||2}mm}body{margin:0;padding:0}table{width:100%;border-collapse:collapse}</style></head><body>${htmlComanda(nomeComanda, righe, scontrino, config)}</body></html>`
-  const w = window.open('', '_blank', 'width:400,height:500')
-  if (!w) return
-  w.document.write(html)
-  w.document.close()
-  w.onload = () => w.print()
+  printViaIframe(html)
 }

@@ -3,9 +3,9 @@ chcp 65001 >nul 2>&1
 title Backup Cassa Oratorio
 
 echo.
-echo  ????????????????????????????????????????????????
+echo  ================================================
 echo   BACKUP DATI - Cassa Oratorio
-echo  ????????????????????????????????????????????????
+echo  ================================================
 echo.
 
 set BACKUP_DIR=%~dp0backup
@@ -18,12 +18,10 @@ if not exist "%BACKUP_DIR%" mkdir "%BACKUP_DIR%"
 echo  Creo backup in: %BACKUP_FILE%
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "Compress-Archive -Path '%~dp0app\pb_data' -DestinationPath '%BACKUP_FILE%' -Force; ^
-   Write-Host '  ? Backup completato!' -ForegroundColor Green; ^
-   Write-Host ('  Dimensione: ' + [math]::Round((Get-Item ''%BACKUP_FILE%'').Length/1KB) + ' KB')"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%~dp0app\pb_data' -DestinationPath '%BACKUP_FILE%' -Force"
 
 echo.
+echo  Backup completato!
 echo  I backup sono salvati in: %BACKUP_DIR%
 echo.
 pause

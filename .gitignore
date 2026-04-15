@@ -1,0 +1,27 @@
+# Database PocketBase (dati utente - NON committare)
+app/pb_data/*.db
+app/pb_data/*.db-shm
+app/pb_data/*.db-wal
+
+# Log
+cassa.log
+app/pb_log.txt
+*.log
+
+# Config con credenziali (generato al primo avvio)
+cassa.config.json
+
+# Dipendenze Node
+frontend-src/node_modules/
+
+# Backup dati utente
+backup/
+
+# File temporanei e build artifacts
+CassaOratorio.zip
+*.tmp
+
+# File IDE
+*.code-workspace
+.vscode/
+.idea/

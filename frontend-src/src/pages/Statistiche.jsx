@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '../components/Toast'
 import pb from '../lib/pb'
+import { fsConfirm, ripristinaFullscreen } from '../lib/fullscreen'
 
 const EUR = v => '€ ' + Number(v).toFixed(2).replace('.', ',')
 
 function oggi() { return new Date().toISOString().slice(0, 10) }
+
+import * as XLSX from 'xlsx'
 
 export default function Statistiche() {
   const toast = useToast()
@@ -20,7 +23,7 @@ export default function Statistiche() {
     const msg = tutto
       ? 'Eliminare TUTTI gli scontrini? Questa operazione è irreversibile!'
       : `Eliminare tutti gli scontrini dal ${dal} al ${al}? Operazione irreversibile!`
-    if (!confirm(msg)) return
+    if (!fsConfirm(msg)) return
     setEliminando(true)
     try {
       pb.autoCancellation(false)
@@ -81,8 +84,8 @@ export default function Statistiche() {
 
   // STAMPA
   const stampa = () => {
-    const w = window.open('', '_blank')
-    w.document.write(`
+    const wasFs = !!document.fullscreenElement
+    const html = `
       <html><head><title>Statistiche ${dal} - ${al}</title>
       <style>
         body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
@@ -113,46 +116,77 @@ export default function Statistiche() {
         ${venduto.map(v => `<tr><td>${v.nome}</td><td>${v.qta}</td><td>${v.omaggi||'-'}</td><td><b>${EUR(v.tot)}</b></td></tr>`).join('')}
         <tr style="background:#f9f9f9;font-weight:bold"><td>TOTALE</td><td>${venduto.reduce((s,v)=>s+v.qta,0)}</td><td></td><td>${EUR(incasso)}</td></tr>
       </tbody></table>
-      <script>window.print(); setTimeout(()=>window.close(),1000)</script>
-      </body></html>`)
-    w.document.close()
+      </body></html>`
+    const oldFrame = document.getElementById('_print_stats')
+    if (oldFrame) oldFrame.remove()
+    const iframe = document.createElement('iframe')
+    iframe.id = '_print_stats'
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentDocument || iframe.contentWindow.document
+    doc.open(); doc.write(html); doc.close()
+    iframe.onload = () => {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+      if (wasFs) ripristinaFullscreen()
+      setTimeout(() => iframe.remove(), 5000)
+    }
   }
 
-  // EXPORT CSV
-  const exportCSV = () => {
-    const rows = [
-      ['Prodotto','Quantita','Omaggi','Totale EUR'],
-      ...venduto.map(v => [v.nome, v.qta, v.omaggi||0, v.tot.toFixed(2)])
+  // EXPORT XLSX
+  const exportXLSX = () => {
+    const wb = XLSX.utils.book_new()
+
+    // Foglio 1: Venduto per prodotto
+    const rowsVenduto = [
+      ['Prodotto', 'Quantita totale', 'di cui omaggi', 'Quantita pagata', 'Totale EUR'],
+      ...venduto.map(v => [
+        v.nome,
+        (v.qta + (v.omaggi||0)),
+        v.omaggi||0,
+        v.qta,
+        parseFloat(v.tot.toFixed(2))
+      ])
     ]
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(';')).join('\
-')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `statistiche_${dal}_${al}.csv`
-    a.click()
-  }
+    const ws1 = XLSX.utils.aoa_to_sheet(rowsVenduto)
+    ws1['!cols'] = [{wch:30},{wch:16},{wch:14},{wch:16},{wch:12}]
+    XLSX.utils.book_append_sheet(wb, ws1, 'Venduto')
 
-  // EXPORT SCONTRINI CSV
-  const exportScontriniCSV = () => {
-    const rows = [
-      ['Numero','Data','Totale','Pagamento','Stornato','Postazione'],
+    // Foglio 2: Scontrini
+    const rowsScontrini = [
+      ['Numero','Data','Lordo EUR','Sconto EUR','Netto EUR','Pagamento','Stornato','Postazione'],
       ...scontrini.map(s => [
-        String(s.numero).padStart(4,'0'),
+        parseInt(s.numero),
         new Date(s.data_ora).toLocaleString('it-IT'),
-        s.totale_netto.toFixed(2),
+        parseFloat((s.totale_lordo||0).toFixed(2)),
+        parseFloat((s.sconto_euro||0).toFixed(2)),
+        parseFloat((s.totale_netto||0).toFixed(2)),
         s.tipo_pagamento,
         s.stornato ? 'SI' : 'NO',
         s.postazione || ''
       ])
     ]
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(';')).join('\
-')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `scontrini_${dal}_${al}.csv`
-    a.click()
+    const ws2 = XLSX.utils.aoa_to_sheet(rowsScontrini)
+    ws2['!cols'] = [{wch:8},{wch:18},{wch:10},{wch:10},{wch:10},{wch:10},{wch:8},{wch:12}]
+    XLSX.utils.book_append_sheet(wb, ws2, 'Scontrini')
+
+    // Foglio 3: Riepilogo
+    const rowsRiepilogo = [
+      ['Voce', 'Valore'],
+      ['Periodo', dal + ' — ' + al],
+      ['Incasso netto', parseFloat(incasso.toFixed(2))],
+      ['Incasso lordo', parseFloat(incassoLordo.toFixed(2))],
+      ['Sconti totali', parseFloat(scontiTot.toFixed(2))],
+      ['Scontrini', validi.length],
+      ['Media scontrino', parseFloat((validi.length ? incasso/validi.length : 0).toFixed(2))],
+      ['Contanti', parseFloat(incassoContanti.toFixed(2))],
+      ['Carta', parseFloat(incassoCarta.toFixed(2))],
+    ]
+    const ws3 = XLSX.utils.aoa_to_sheet(rowsRiepilogo)
+    ws3['!cols'] = [{wch:20},{wch:15}]
+    XLSX.utils.book_append_sheet(wb, ws3, 'Riepilogo')
+
+    XLSX.writeFile(wb, 'statistiche_' + dal + '_' + al + '.xlsx')
   }
 
   return (
@@ -165,16 +199,12 @@ export default function Statistiche() {
               borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
             Stampa
           </button>
-          <button onClick={exportCSV}
+          <button onClick={exportXLSX}
             style={{ padding: '7px 14px', background: 'var(--green)', color: '#fff', border: 'none',
               borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            ⬇ CSV Venduto
+            ⬇ Excel Venduto
           </button>
-          <button onClick={exportScontriniCSV}
-            style={{ padding: '7px 14px', background: 'var(--blue)', color: '#fff', border: 'none',
-              borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            ⬇ CSV Scontrini
-          </button>
+
         </div>
       </div>
 
@@ -242,12 +272,13 @@ export default function Statistiche() {
           </div>
         </div>
         <table>
-          <thead><tr><th>#</th><th>Data/Ora</th><th>Totale lordo</th><th>Sconto</th><th>Netto</th><th>Pagamento</th><th>Stato</th></tr></thead>
+          <thead><tr><th>#</th><th>Data/Ora</th><th>Operatore</th><th>Totale lordo</th><th>Sconto</th><th>Netto</th><th>Pagamento</th><th>Stato</th></tr></thead>
           <tbody>
             {scontrini.map(s => (
               <tr key={s.id}>
                 <td style={{ fontWeight: 700, fontFamily: 'Barlow Condensed' }}>#{String(s.numero).padStart(4,'0')}</td>
                 <td>{new Date(s.data_ora).toLocaleString('it-IT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</td>
+                <td style={{ fontSize: 12, color: 'var(--text2)' }}>{s.postazione || '—'}</td>
                 <td style={{ color: 'var(--text2)' }}>{EUR(s.totale_lordo)}</td>
                 <td style={{ color: 'var(--green)' }}>{(s.sconto_euro > 0 || s.sconto_perc > 0) ? (s.sconto_euro > 0 ? '- '+EUR(s.sconto_euro) : s.sconto_perc+'%') : '—'}</td>
                 <td style={{ fontWeight: 700, color: 'var(--accent2)', fontFamily: 'Barlow Condensed', fontSize: 15 }}>{EUR(s.totale_netto)}</td>
@@ -255,7 +286,7 @@ export default function Statistiche() {
                 <td><span className={`badge ${s.stornato ? 'badge-storno' : 'badge-ok'}`}>{s.stornato ? 'Stornato' : 'OK'}</span></td>
               </tr>
             ))}
-            {!scontrini.length && <tr><td colSpan={7} style={{ color: 'var(--text3)', textAlign: 'center', padding: 20 }}>Nessuno scontrino nel periodo</td></tr>}
+            {!scontrini.length && <tr><td colSpan={8} style={{ color: 'var(--text3)', textAlign: 'center', padding: 20 }}>Nessuno scontrino nel periodo</td></tr>}
           </tbody>
         </table>
       </div>

@@ -58,7 +58,7 @@ function ShowWelcome {
     $f = MakeForm "Cassa Oratorio - Installazione" 540 460
     
     # Header blu
-    $header = MakePanel $f 0 0 500 80 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $header = MakePanel $f 0 0 540 80 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $title = New-Object System.Windows.Forms.Label
     $title.Text = "CASSA ORATORIO"
     $title.Left = 20; $title.Top = 20; $title.Width = 460; $title.Height = 30
@@ -97,7 +97,7 @@ function ShowWelcome {
 function ShowLocation {
     $f = MakeForm "Cassa Oratorio - Posizione installazione" 540 500
     
-    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $t = New-Object System.Windows.Forms.Label
     $t.Text = "Dove vuoi installare Cassa Oratorio?"
     $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
@@ -178,7 +178,7 @@ function ShowLocation {
 function ShowAccount {
     $f = MakeForm "Cassa Oratorio - Account amministratore" 540 440
 
-    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $t = New-Object System.Windows.Forms.Label
     $t.Text = "Crea l'account amministratore"
     $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
@@ -226,7 +226,7 @@ function ShowAccount {
 function ShowOptions {
     $f = MakeForm "Cassa Oratorio - Opzioni" 540 420
 
-    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $t = New-Object System.Windows.Forms.Label
     $t.Text = "Opzioni di installazione"
     $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
@@ -272,10 +272,14 @@ function ShowOptions {
 
 # ── Schermata 5: Installazione in corso ──────────────────────
 function ShowProgress($installPath, $email, $password, $isUSB, $desktop) {
+    # IMPORTANTE: $MyInvocation.ScriptName funziona solo a livello di funzione,
+    # non dentro i blocchi event handler (Add_Shown, Add_Click, ecc.)
+    $src = (Split-Path -Parent $MyInvocation.ScriptName).TrimEnd('\') + '\'
+
     $f = MakeForm "Cassa Oratorio - Installazione in corso..." 540 460
     $f.ControlBox = $false
 
-    $header = MakePanel $f 0 0 500 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
+    $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $t = New-Object System.Windows.Forms.Label
     $t.Text = "Installazione in corso..."
     $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
@@ -322,7 +326,6 @@ function ShowProgress($installPath, $email, $password, $isUSB, $desktop) {
 
         # Step 2: Copia file
         $lblStatus.Text = "Copia file..."; $progress.Value = 15; $f.Refresh()
-        $src = Split-Path -Parent $MyInvocation.ScriptName
         try {
             $exclude = @('pb_data', 'cassa.config.json', 'cassa.log', 'backup', 'node_modules', 'dist')
             Get-ChildItem $src -Recurse | Where-Object {

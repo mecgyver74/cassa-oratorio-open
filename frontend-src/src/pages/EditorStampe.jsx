@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from 'react'
-import { getConfig, saveConfig } from '../lib/stampa'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { getConfig, saveConfig, loadStampaConfig } from '../lib/stampa'
 import { useToast } from '../components/Toast'
+import { fsConfirm } from '../lib/fullscreen'
 
 const FONTS = [
   "'Courier New', monospace",
@@ -59,7 +60,7 @@ function Preview({ cfg, tipo }) {
         <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '3px 0' }} />
         {cfg.mostraData !== false && <div>Data: {new Date().toLocaleString('it-IT')}</div>}
         <div>Scontrino n. 0042</div>
-        <div>Tavolo: 5</div>
+        <div>Tavolo/Nome: 5</div>
         <div style={{ fontStyle: 'italic', fontSize: fontSize - 1 }}>Note: Nessuna cipolla</div>
         <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '3px 0' }} />
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -107,7 +108,7 @@ function Preview({ cfg, tipo }) {
       {cfg.mostraOrario !== false && <div>{new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>}
       {cfg.mostraTavolo !== false && (
         <div style={{ fontSize: fontSizeComanda + 4, fontWeight: 900, borderBottom: '2px solid #000' }}>
-          TAVOLO 5
+          TAVOLO/NOME 5
         </div>
       )}
       <div style={{ fontStyle: 'italic', fontSize: fontSizeComanda - 2 }}>Note: Nessuna cipolla</div>
@@ -136,6 +137,9 @@ export default function EditorStampe() {
   const [cfg, setCfg] = useState(() => getConfig())
   const [tab, setTab] = useState('scontrino')
 
+  // Ricarica dal DB se la cache sync era vuota
+  useEffect(() => { loadStampaConfig().then(c => { if (c && Object.keys(c).length > 0) setCfg(c) }) }, [])
+
   const set = (k, v) => setCfg(prev => ({ ...prev, [k]: v }))
 
   const salva = () => {
@@ -144,7 +148,7 @@ export default function EditorStampe() {
   }
 
   const reset = () => {
-    if (!confirm('Ripristinare le impostazioni predefinite?')) return
+    if (!fsConfirm('Ripristinare le impostazioni predefinite?')) return
     const def = {}
     saveConfig(def)
     setCfg(def)
@@ -267,7 +271,7 @@ export default function EditorStampe() {
               <CB label="Evidenzia quantità (font grande)" k="evidenziaQta" />
               <CB label="Mostra numero scontrino" k="mostraNumero" />
               <CB label="Mostra orario" k="mostraOrario" />
-              <CB label="Mostra numero tavolo" k="mostraTavolo" />
+              <CB label="Mostra tavolo/nome" k="mostraTavolo" />
             </div>
           </div>
         )}

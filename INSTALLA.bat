@@ -11,3 +11,10 @@ if not exist "%PS%" (
 )
 
 "%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALLA.ps1"
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo  ERRORE: l'installazione e' terminata con errori ^(codice: %ERRORLEVEL%^)
+    echo  Riprova o contatta il supporto.
+    echo.
+    pause
+)

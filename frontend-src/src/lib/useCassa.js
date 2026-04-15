@@ -23,9 +23,28 @@ export function useCassa() {
   const getTotale = useCallback(() =>
     Math.max(0, getSub() - getScontoCalcolato()), [getSub, getScontoCalcolato])
 
-  const addProdotto = useCallback((prodotto) => {
+  const addProdotto = useCallback((prodotto, onErrore) => {
     setRighe(prev => {
-      const idx = prev.findIndex(r => r._prodotto_id === prodotto.id && !r.omaggio)
+      // Conta TUTTE le righe dello stesso prodotto (pagate + omaggio)
+      const qtaCarrello = prev
+        .filter(r => r._prodotto_id === prodotto.id)
+        .reduce((s, r) => s + r.quantita, 0)
+      const scorta = prodotto.quantita
+
+      // Verifica scorta (scorta -1 = infinita)
+      if (scorta !== -1 && scorta !== undefined) {
+        if (scorta <= 0) {
+          onErrore && onErrore(`${prodotto.nome} è esaurito`)
+          return prev
+        }
+        if (qtaCarrello >= scorta) {
+          onErrore && onErrore(`${prodotto.nome}: scorta disponibile ${scorta} pz, già nel carrello ${qtaCarrello}`)
+          return prev
+        }
+      }
+
+      // Aggiungi alla riga pagata esistente (non omaggio e senza note/personalizzazioni)
+      const idx = prev.findIndex(r => r._prodotto_id === prodotto.id && !r.omaggio && !r.note)
       if (idx >= 0) {
         const n = [...prev]; n[idx] = { ...n[idx], quantita: n[idx].quantita + 1 }; return n
       }
@@ -34,6 +53,7 @@ export function useCassa() {
         _prodotto_id: prodotto.id,
         _tipo: 'prodotto',
         _famId: prodotto.famiglia,
+        _ingredienti: Array.isArray(prodotto.ingredienti) ? prodotto.ingredienti : [],
         prodotto: prodotto.id,
         menu: null,
         nome_snapshot: prodotto.nome,
@@ -61,10 +81,21 @@ export function useCassa() {
     }])
   }, [])
 
-  const setQuantita = useCallback((key, q) => {
-    setRighe(prev => q <= 0
-      ? prev.filter(r => r._key !== key)
-      : prev.map(r => r._key === key ? { ...r, quantita: q } : r))
+  const setQuantita = useCallback((key, q, prodottoScorta, onErrore) => {
+    setRighe(prev => {
+      if (q <= 0) return prev.filter(r => r._key !== key)
+      if (prodottoScorta !== undefined && prodottoScorta !== -1) {
+        // Calcola totale per questo prodotto (tutte le righe tranne quella corrente)
+        const rigaCorrente = prev.find(r => r._key === key)
+        const altreRighe = prev.filter(r => r._key !== key && r._prodotto_id === rigaCorrente?._prodotto_id)
+        const qtaAltre = altreRighe.reduce((s, r) => s + r.quantita, 0)
+        if (qtaAltre + q > prodottoScorta) {
+          onErrore && onErrore(`Scorta disponibile: ${prodottoScorta} pz (già ${qtaAltre} in altre righe)`)
+          return prev
+        }
+      }
+      return prev.map(r => r._key === key ? { ...r, quantita: q } : r)
+    })
   }, [])
 
   const toggleOmaggio = useCallback((key) => {
@@ -79,7 +110,7 @@ export function useCassa() {
     setRighe([]); setScontoPerc(0); setScontoEuro(0); setTavolo(null); setNote('')
   }, [])
 
-  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente }) => {
+  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente, asporto }) => {
     setLoading(true)
     pb.autoCancellation(false)
     try {
@@ -97,7 +128,7 @@ export function useCassa() {
         numero: nextNum,
         data_ora: new Date().toISOString(),
         operatore: utente?.id || null,
-        postazione: utente?.postazione || 'Cassa',
+        postazione: utente?.nome || utente?.postazione || 'Cassa',
         tavolo: tavolo?.id || null,
         note,
         totale_lordo: Math.max(0, sub || 0),
@@ -108,6 +139,7 @@ export function useCassa() {
         pagato: Math.max(0, pagato || totale || 0),
         resto: Math.max(0, (pagato || totale || 0) - (totale || 0)),
         stornato: false,
+        asporto: asporto || false,
       })
 
       // Crea righe
@@ -127,28 +159,31 @@ export function useCassa() {
         })
       ))
 
-      // Scala magazzino
-      await Promise.all(righe.filter(r => r.prodotto).map(async r => {
+      // Scala magazzino (sequenziale per evitare race condition su stesso prodotto)
+      for (const r of righe.filter(r => r.prodotto)) {
         try {
           const prod = await pb.collection('prodotti').getOne(r.prodotto, { expand: 'magazzino_comune' })
           if (prod.magazzino_comune && prod.expand?.magazzino_comune) {
             const mc = prod.expand.magazzino_comune
             if (mc.quantita >= 0) { // -1 = infinito, non scalare
-              await pb.collection('magazzini_comuni').update(mc.id, { quantita: Math.max(0, mc.quantita - r.quantita) })
+              const mcFresh = await pb.collection('magazzini_comuni').getOne(mc.id)
+              await pb.collection('magazzini_comuni').update(mc.id, { quantita: Math.max(0, mcFresh.quantita - r.quantita) })
               await pb.collection('movimenti_magazzino').create({ magazzino_comune: mc.id, tipo: 'scarico', quantita: r.quantita, note: `Scontrino #${nextNum}`, scontrino: sc.id })
             }
           } else {
             if (prod.quantita >= 0) { // -1 = infinito, non scalare
-              await pb.collection('prodotti').update(r.prodotto, { quantita: Math.max(0, prod.quantita - r.quantita) })
+              const prodFresh = await pb.collection('prodotti').getOne(r.prodotto)
+              await pb.collection('prodotti').update(r.prodotto, { quantita: Math.max(0, prodFresh.quantita - r.quantita) })
               await pb.collection('movimenti_magazzino').create({ prodotto: r.prodotto, tipo: 'scarico', quantita: r.quantita, note: `Scontrino #${nextNum}`, scontrino: sc.id })
             }
           }
         } catch(e) { console.warn('Errore scarico:', e) }
-      }))
+      }
 
       // Stampa unificata: scontrino + tutte le comande in una sola finestra
       try {
-        const cfg = JSON.parse(localStorage.getItem('cassa_stampa_config') || '{}')
+        const { getConfig } = await import('./stampa')
+        const cfg = getConfig()
         const comande = await pb.collection('comande').getFullList({ filter: 'abilitata=true', sort: 'ordine,nome' })
         const scForPrint = { ...sc, tavolo: tavolo?.numero || null }
 
@@ -167,8 +202,9 @@ export function useCassa() {
           if (righeC.length > 0) righePerComanda[comanda.id] = righeC
         }
 
-        // Una sola finestra con tutto
-        stampaTutto(scForPrint, righeSalvate, comande, righePerComanda, cfg)
+        // Una sola finestra con tutto - solo comande con invia_stampante=true
+        const comandeDaStampare = comande.filter(com => com.invia_stampante)
+        stampaTutto(scForPrint, righeSalvate, comandeDaStampare, righePerComanda, cfg)
       } catch(e) { console.warn('Errore stampa:', e) }
 
       svuota()
@@ -212,6 +248,18 @@ export function useCassa() {
     setRighe(prev => prev.map(r => r._key === key ? { ...r, note: nota } : r))
   }, [])
 
+  // Splitta una riga con qta > 1 in due righe: una con qta 1 e una col resto
+  const splitRiga = useCallback((key) => {
+    setRighe(prev => {
+      const riga = prev.find(r => r._key === key)
+      if (!riga || riga.quantita <= 1) return prev
+      const nuovaRiga = { ...riga, _key: Date.now() + Math.random(), quantita: 1, note: '' }
+      return prev.map(r => r._key === key ? { ...r, quantita: r.quantita - 1 } : r).concat(nuovaRiga)
+    })
+    // Ritorna la key della nuova riga splittata (per aprire il dropdown su di essa)
+    return Date.now()
+  }, [])
+
   return {
     righe, setRighe,
     scontoPerc, setScontoPerc,
@@ -221,7 +269,7 @@ export function useCassa() {
     loading,
     getSub, getScontoCalcolato, getTotale,
     addProdotto, addMenu,
-    setQuantita, toggleOmaggio, rimuoviRiga, setNoteRiga,
+    setQuantita, toggleOmaggio, rimuoviRiga, setNoteRiga, splitRiga,
     svuota, pagaeSalva, stornoScontrino,
   }
 }

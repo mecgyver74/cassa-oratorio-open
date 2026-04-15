@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import pb from '../lib/pb'
+import { stampaTutto, getConfig } from '../lib/stampa'
+import { fsConfirm, fsPrompt } from '../lib/fullscreen'
 
 const EUR = v => '€ ' + Number(v).toFixed(2).replace('.', ',')
 
@@ -32,13 +34,26 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
     setLoadingRighe(true)
     try {
       pb.autoCancellation(false)
-      // Carica righe dello scontrino selezionato
-      const r = await pb.collection('righe_scontrino').getFullList({
-        filter: `scontrino='${sc.id}'`,
-        sort: 'created'
-      })
+      // Costruisci URL manualmente con filtro correttamente encodato
+      // Usa fetch senza parametri e filtra lato client
+      // PocketBase dà 400 con qualsiasi parametro su questa collection
+      const headers = {}
+      if (pb.authStore.token) headers['Authorization'] = `Bearer ${pb.authStore.token}`
+      const righeUrl = `${pb.baseUrl}/api/collections/righe_scontrino/records`
+      const totRes = await fetch(righeUrl, { headers })
+      const totData = await totRes.json()
+      const total = totData.totalItems || 0
+      const perPage = totData.perPage || 30
+      const pages = Math.ceil(total / perPage)
+      let tutteRighe = [...(totData.items || [])]
+      // Carica le pagine successive se necessario
+      for (let p = 2; p <= pages; p++) {
+        const pr = await fetch(`${righeUrl}?page=${p}`, { headers })
+        const pd = await pr.json()
+        tutteRighe = tutteRighe.concat(pd.items || [])
+      }
       pb.autoCancellation(true)
-      setRighe(r)
+      setRighe(tutteRighe.filter(r => r.scontrino === sc.id))
     } catch(e) {
       pb.autoCancellation(true)
       console.error('Errore righe:', e)
@@ -48,8 +63,8 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
 
   const handleStorno = async () => {
     if (!sel) return
-    if (!confirm(`Stornare lo scontrino #${String(sel.numero).padStart(4,'0')}?`)) return
-    const note = prompt('Note storno (facoltativo):') ?? ''
+    if (!fsConfirm(`Stornare lo scontrino #${String(sel.numero).padStart(4,'0')}?`)) return
+    const note = fsPrompt('Note storno (facoltativo):') ?? ''
     const res = await stornoScontrino(sel.id, note)
     if (res.ok) {
       toast('Scontrino stornato', 'r')
@@ -61,7 +76,7 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
   }
 
   const handleStornaRiga = async riga => {
-    if (!confirm(`Rimuovere "${riga.nome_snapshot}" dallo scontrino?`)) return
+    if (!fsConfirm(`Rimuovere "${riga.nome_snapshot}" dallo scontrino?`)) return
     try {
       await pb.collection('righe_scontrino').update(riga.id, { stornata: true })
       // Ricalcola totale
@@ -129,6 +144,37 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
       setSel(updated)
       caricaScontrini()
     } catch(e) { toast('Errore: ' + e.message, 'r') }
+  }
+
+  const ristampa = async (scontrino, righeScontrino) => {
+    try {
+      const cfg = getConfig()
+      const comande = await pb.collection('comande').getFullList({ filter: 'abilitata=true', sort: 'ordine,nome' })
+      const scForPrint = { ...scontrino, tavolo: scontrino.tavolo?.numero || null }
+
+      // Recupera famiglie per i prodotti nelle righe
+      const prodIds = righeScontrino.filter(r => r.prodotto).map(r => r.prodotto)
+      const prodotti = prodIds.length > 0 ? await pb.collection('prodotti').getFullList({ filter: prodIds.map(id => `id="${id}"`).join(' || ') }) : []
+      const prodMap = Object.fromEntries(prodotti.map(p => [p.id, p.famiglia]))
+
+      // Costruisci mappa righe per comanda
+      const righePerComanda = {}
+      for (const comanda of comande) {
+        let famIds = comanda.famiglie_ids || []
+        if (typeof famIds === 'string') { try { famIds = JSON.parse(famIds) } catch { famIds = [] } }
+        const righeC = righeScontrino
+          .filter(r => r.prodotto && famIds.includes(prodMap[r.prodotto]))
+          .map(r => ({
+            ...r,
+            totale_riga: r.omaggio ? 0 : (r.prezzo_snapshot * r.quantita)
+          }))
+        if (righeC.length > 0) righePerComanda[comanda.id] = righeC
+      }
+
+      // Una sola finestra con tutto - solo comande con invia_stampante=true
+      const comandeDaStampare = comande.filter(com => com.invia_stampante)
+      stampaTutto(scForPrint, righeScontrino, comandeDaStampare, righePerComanda, cfg)
+    } catch(e) { console.warn('Errore ristampa:', e) }
   }
 
   const filtrati = scontrini.filter(s =>
@@ -278,12 +324,12 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
 
                 {/* Azioni scontrino */}
                 {!sel.stornato && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                     <div style={{ background: 'var(--surf2)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
                       <div style={{ fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14, marginBottom: 10, color: 'var(--text)' }}>Applica sconto</div>
                       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                         <input type="number" min="0" value={scontoVal} onChange={e => setScontoVal(e.target.value)}
-                          placeholder="Valore" style={{ flex: 1, background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', fontSize: 15, color: 'var(--text)' }} />
+                          placeholder="Valore" style={{ flex: 1, background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', fontSize: 15, color: 'var(--text)', minWidth: 0 }} />
                         <select value={scontoTipo} onChange={e => setScontoTipo(e.target.value)}
                           style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', fontSize: 13, color: 'var(--text)' }}>
                           <option value="euro">€</option>
@@ -295,10 +341,20 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
                         Applica sconto
                       </button>
                     </div>
-                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 14 }}>
+                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14, marginBottom: 10, color: 'var(--blue)' }}>Ristampa</div>
+                      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5, flex: 1 }}>
+                        Ristampa lo scontrino e le comande con i dati attuali.
+                      </div>
+                      <button onClick={async () => { if (righe.length === 0) { toast('Nessuna riga caricata', 'r'); return } await ristampa(sel, righe); toast('Ristampa avviata', 'b') }}
+                        style={{ width: '100%', padding: 9, background: 'var(--blue)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                        🖨 Ristampa
+                      </button>
+                    </div>
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column' }}>
                       <div style={{ fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14, marginBottom: 10, color: 'var(--red)' }}>Storno totale</div>
-                      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5 }}>
-                        Annulla l'intero scontrino e ricarica il magazzino automaticamente.
+                      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5, flex: 1 }}>
+                        Annulla l'intero scontrino e ricarica il magazzino.
                       </div>
                       <button onClick={handleStorno}
                         style={{ width: '100%', padding: 9, background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
