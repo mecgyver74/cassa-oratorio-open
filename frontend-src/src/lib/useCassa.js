@@ -117,9 +117,9 @@ export function useCassa() {
       const totale = getTotale()
       const sub = getSub()
 
-      // Prossimo numero scontrino
+      // Prossimo numero scontrino — conta solo quelli della sessione corrente (sessione="")
       const ultimi = await pb.collection('scontrini').getList(1, 1, {
-        sort: '-numero', fields: 'numero'
+        sort: '-numero', fields: 'numero', filter: 'sessione=""'
       }).catch(() => ({ items: [] }))
       const nextNum = (ultimi.items[0]?.numero || 0) + 1
 

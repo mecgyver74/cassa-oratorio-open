@@ -232,7 +232,7 @@ export default function App() {
 
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
           {page === 'cassa'        && <Cassa utente={utente} />}
-          {page === 'statistiche'  && <div style={{ flex:1, overflowY:'auto' }}><Statistiche /></div>}
+          {page === 'statistiche'  && <div style={{ flex:1, overflowY:'auto' }}><Statistiche utente={utente} /></div>}
           {page === 'magazzino'    && <div style={{ flex:1, overflowY:'auto' }}><Magazzino /></div>}
           {page === 'setup'        && <div style={{ flex:1, overflowY:'auto' }}><Setup /></div>}
           {page === 'stampe'       && <div style={{ flex:1, overflowY:'auto' }}><EditorStampe /></div>}
