@@ -1,4 +1,4 @@
-﻿# IMPORTA DATI - Cassa Oratorio
+﻿# IMPORTA DATI - Cassa Dalila
 # Importa famiglie, magazzini comuni e prodotti tramite API PocketBase
 param(
     [string]$PbUrl = "http://127.0.0.1:8090",
@@ -10,7 +10,7 @@ $ErrorActionPreference = "Continue"
 
 Write-Host ""
 Write-Host "  +=============================================+" -ForegroundColor Cyan
-Write-Host "  |   IMPORTAZIONE DATI - Cassa Oratorio       |" -ForegroundColor Cyan
+Write-Host "  |   IMPORTAZIONE DATI - Cassa Dalila       |" -ForegroundColor Cyan
 Write-Host "  +=============================================+" -ForegroundColor Cyan
 Write-Host ""
 

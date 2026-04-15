@@ -24,7 +24,7 @@ export async function saveConfig(cfg) {
 
 // Genera HTML scontrino
 function htmlScontrino(scontrino, righe, cfg) {
-  const nome = cfg.nomeLoc || 'Cassa Oratorio'
+  const nome = cfg.nomeLoc || 'Cassa Dalila'
   const ind = cfg.indirizzo || ''
   const footer = cfg.footerScontrino || 'Grazie e arrivederci!'
   const fontFamily = cfg.fontFamily || "'Courier New', monospace"
@@ -83,7 +83,7 @@ function htmlScontrino(scontrino, righe, cfg) {
 
 // Genera HTML comanda
 function htmlComanda(nomeComanda, righe, scontrino, cfg) {
-  const nome = cfg.nomeLoc || 'Cassa Oratorio'
+  const nome = cfg.nomeLoc || 'Cassa Dalila'
   const fontFamily = cfg.fontComanda || "'Courier New', monospace"
   const fontSizeComanda = cfg.fontSizeComanda || 14
   const mostraTavolo = cfg.mostraTavolo !== false

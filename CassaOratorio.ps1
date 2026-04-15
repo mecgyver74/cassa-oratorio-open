@@ -1,4 +1,4 @@
-﻿# CASSA ORATORIO - Launcher v1.5 (PocketBase v0.36+)
+﻿# CASSA DALILA - Launcher v1.5 (PocketBase v0.36+)
 $ErrorActionPreference = "Continue"
 $ProgressPreference    = "SilentlyContinue"
 $VerbosePreference     = "Continue"
@@ -41,7 +41,7 @@ function WaitPB($sec) {
 Clear-Host
 Write-Host ""
 Write-Host "  +=============================================+" -ForegroundColor Yellow
-Write-Host "  |       CASSA ORATORIO  v1.0.0              |" -ForegroundColor Yellow
+Write-Host "  |       CASSA DALILA  v1.0.0              |" -ForegroundColor Yellow
 Write-Host "  +=============================================+" -ForegroundColor Yellow
 Write-Host ""
 
@@ -129,9 +129,9 @@ if ($cfg.firstRun -or -not $cfg.adminEmail) {
 
     # Apri porta firewall per accesso da rete locale (silenzioso, richiede admin)
 try {
-    $fwRule = Get-NetFirewallRule -DisplayName "Cassa Oratorio" -ErrorAction SilentlyContinue
+    $fwRule = Get-NetFirewallRule -DisplayName "Cassa Dalila" -ErrorAction SilentlyContinue
     if (-not $fwRule) {
-        New-NetFirewallRule -DisplayName "Cassa Oratorio" `
+        New-NetFirewallRule -DisplayName "Cassa Dalila" `
             -Direction Inbound -Protocol TCP -LocalPort $PB_PORT `
             -Action Allow -Profile Any -ErrorAction Stop | Out-Null
         Log "Regola firewall aggiunta (porta $PB_PORT aperta per rete locale)" "Green"
@@ -206,7 +206,7 @@ if ((Test-Path $frontDist) -and (Test-Path (Join-Path $frontDist "index.html")))
     # Pagina temporanea
     @"
 <!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
-<title>Cassa Oratorio</title>
+<title>Cassa Dalila</title>
 <style>body{font-family:sans-serif;background:#0d1117;color:#e6edf3;display:flex;
 align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column}
 h1{color:#f0a500}.box{background:#161b22;border:1px solid #2a3348;border-radius:12px;
@@ -215,7 +215,7 @@ p{color:#8892b0;line-height:1.7}a{color:#f0a500;font-weight:bold}
 .ok{color:#3fb950;font-size:48px;margin-bottom:8px}
 </style></head><body><div class="box">
 <div class="ok">✓</div>
-<h1>Cassa Oratorio</h1>
+<h1>Cassa Dalila</h1>
 <p>Database attivo e pronto!<br><br>
 Per l'interfaccia grafica completa,<br>installa
 <a href="https://nodejs.org" target="_blank">Node.js</a>
@@ -281,7 +281,7 @@ LogOK "Browser aperto: $browserUrl"
 
 Write-Host ""
 Write-Host "  +=============================================+" -ForegroundColor Green
-Write-Host "  |  OK  CASSA ORATORIO e' in esecuzione!     |" -ForegroundColor Green
+Write-Host "  |  OK  CASSA DALILA e' in esecuzione!     |" -ForegroundColor Green
 Write-Host "  |                                           |" -ForegroundColor Green
 Write-Host "  |  Apri: http://127.0.0.1:$PB_PORT              |" -ForegroundColor Green
 Write-Host "  |  NON chiudere questa finestra!            |" -ForegroundColor DarkGreen

@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul 2>&1
-title Cassa Oratorio - Installazione
+title Cassa Dalila - Installazione
 
 set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 

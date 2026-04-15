@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul 2>&1
-title Build Frontend - Cassa Oratorio
+title Build Frontend - Cassa Dalila
 
 echo.
 echo  ============================================
-echo   Build Frontend - Cassa Oratorio
+echo   Build Frontend - Cassa Dalila
 echo  ============================================
 echo.
 

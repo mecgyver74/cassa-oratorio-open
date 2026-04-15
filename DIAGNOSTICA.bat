@@ -1,8 +1,8 @@
 @echo off
-title Cassa Oratorio - Diagnostica
+title Cassa Dalila - Diagnostica
 
 echo.
-echo  === DIAGNOSTICA CASSA ORATORIO ===
+echo  === DIAGNOSTICA CASSA DALILA ===
 echo.
 echo  Questo strumento identifica il problema.
 echo  La finestra resta aperta finche' non premi INVIO.

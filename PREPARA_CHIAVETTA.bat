@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul 2>&1
-title Prepara Chiavetta - Cassa Oratorio
+title Prepara Chiavetta - Cassa Dalila
 
 echo.
 echo  ============================================
-echo   PREPARA CHIAVETTA - Cassa Oratorio
+echo   PREPARA CHIAVETTA - Cassa Dalila
 echo   Esegui questo script dal PC, non dalla
 echo   chiavetta. Poi copia il risultato.
 echo  ============================================

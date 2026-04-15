@@ -69,7 +69,7 @@ Write-Host "  Creo launcher..." -ForegroundColor Cyan
 # Il launcher usa direttamente pocketbase.exe senza PowerShell
 $avvia = @'
 @echo off
-title Cassa Oratorio
+title Cassa Dalila
 cd /d "%~dp0app"
 
 if not exist "pocketbase.exe" (
@@ -78,7 +78,7 @@ if not exist "pocketbase.exe" (
     exit /b 1
 )
 
-echo Avvio Cassa Oratorio...
+echo Avvio Cassa Dalila...
 echo Non chiudere questa finestra!
 echo.
 
@@ -104,12 +104,12 @@ $avvia | Set-Content (Join-Path $destDir "AVVIA_CASSA.bat") -Encoding ASCII
 # 5. Crea PRIMO_AVVIO.bat per configurare admin
 $primo = @'
 @echo off
-title Cassa Oratorio - Primo avvio
+title Cassa Dalila - Primo avvio
 cd /d "%~dp0app"
 
 echo.
 echo  ==========================================
-echo    CASSA ORATORIO - Primo avvio
+echo    CASSA DALILA - Primo avvio
 echo  ==========================================
 echo.
 echo  Questo script configura l account amministratore.
@@ -143,7 +143,7 @@ $primo | Set-Content (Join-Path $destDir "PRIMO_AVVIO.bat") -Encoding ASCII
 # 6. Crea BACKUP.bat
 $backup = @'
 @echo off
-title Backup Cassa Oratorio
+title Backup Cassa Dalila
 set DEST=%~dp0backup_%date:~6,4%%date:~3,2%%date:~0,2%.zip
 echo Backup in corso: %DEST%
 powershell -NoProfile -Command "Compress-Archive -Path '%~dp0app\pb_data' -DestinationPath '%DEST%' -Force"
@@ -154,7 +154,7 @@ $backup | Set-Content (Join-Path $destDir "BACKUP.bat") -Encoding ASCII
 
 # 7. README
 $readme = @"
-CASSA ORATORIO - Versione Portable
+CASSA DALILA - Versione Portable
 ===================================
 
 PRIMO UTILIZZO (solo la prima volta):

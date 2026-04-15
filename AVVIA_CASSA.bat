@@ -1,5 +1,5 @@
 @echo off
-title Cassa Oratorio
+title Cassa Dalila
 
 set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 
@@ -9,7 +9,7 @@ if not exist "%PS%" (
     exit /b 1
 )
 
-echo Avvio Cassa Oratorio...
+echo Avvio Cassa Dalila...
 
 "%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0CassaOratorio.ps1"
 

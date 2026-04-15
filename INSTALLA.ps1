@@ -1,4 +1,4 @@
-# CASSA ORATORIO - Installer grafico
+# CASSA DALILA - Installer grafico
 # Richiede PowerShell 5+ e .NET (incluso in Windows 10/11)
 $ErrorActionPreference = "Continue"
 Add-Type -AssemblyName System.Windows.Forms
@@ -55,12 +55,12 @@ function MakePanel($form, $x, $y, $w, $h, $color) {
 
 # ── Schermata 1: Benvenuto ────────────────────────────────────
 function ShowWelcome {
-    $f = MakeForm "Cassa Oratorio - Installazione" 540 460
+    $f = MakeForm "Cassa Dalila - Installazione" 540 460
     
     # Header blu
     $header = MakePanel $f 0 0 540 80 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $title = New-Object System.Windows.Forms.Label
-    $title.Text = "CASSA ORATORIO"
+    $title.Text = "CASSA DALILA"
     $title.Left = 20; $title.Top = 20; $title.Width = 460; $title.Height = 30
     $title.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
     $title.ForeColor = [System.Drawing.Color]::White
@@ -73,7 +73,7 @@ function ShowWelcome {
     $sub.BackColor = [System.Drawing.Color]::Transparent
     $header.Controls.Add($sub)
 
-    MakeLabel $f "Benvenuto nell'installer di Cassa Oratorio." 20 110 460 20 $true
+    MakeLabel $f "Benvenuto nell'installer di Cassa Dalila." 20 110 460 20 $true
     MakeLabel $f "Questa procedura guidata ti aiuterà a:" 20 135 460 20
     MakeLabel $f "  • Scegliere dove installare il programma (PC o chiavetta USB)" 20 158 460 20
     MakeLabel $f "  • Creare l'account amministratore" 20 178 460 20
@@ -95,11 +95,11 @@ function ShowWelcome {
 
 # ── Schermata 2: Posizione installazione ─────────────────────
 function ShowLocation {
-    $f = MakeForm "Cassa Oratorio - Posizione installazione" 540 500
+    $f = MakeForm "Cassa Dalila - Posizione installazione" 540 500
     
     $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $t = New-Object System.Windows.Forms.Label
-    $t.Text = "Dove vuoi installare Cassa Oratorio?"
+    $t.Text = "Dove vuoi installare Cassa Dalila?"
     $t.Left = 20; $t.Top = 18; $t.Width = 460; $t.Height = 25
     $t.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
     $t.ForeColor = [System.Drawing.Color]::White
@@ -129,7 +129,7 @@ function ShowLocation {
     $btnBrowse = MakeButton $f "..." 410 223 60 26
     $btnBrowse.Add_Click({
         $browser = New-Object System.Windows.Forms.FolderBrowserDialog
-        $browser.Description = "Scegli dove installare Cassa Oratorio"
+        $browser.Description = "Scegli dove installare Cassa Dalila"
         if ($browser.ShowDialog() -eq "OK") {
             $txtPath.Text = Join-Path $browser.SelectedPath "CassaOratorio"
         }
@@ -176,7 +176,7 @@ function ShowLocation {
 
 # ── Schermata 3: Account amministratore ─────────────────────
 function ShowAccount {
-    $f = MakeForm "Cassa Oratorio - Account amministratore" 540 440
+    $f = MakeForm "Cassa Dalila - Account amministratore" 540 440
 
     $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $t = New-Object System.Windows.Forms.Label
@@ -224,7 +224,7 @@ function ShowAccount {
 
 # ── Schermata 4: Opzioni finali ───────────────────────────────
 function ShowOptions {
-    $f = MakeForm "Cassa Oratorio - Opzioni" 540 420
+    $f = MakeForm "Cassa Dalila - Opzioni" 540 420
 
     $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
     $t = New-Object System.Windows.Forms.Label
@@ -243,7 +243,7 @@ function ShowOptions {
     $f.Controls.Add($cbDesktop)
 
     $cbAvvia = New-Object System.Windows.Forms.CheckBox
-    $cbAvvia.Text = "Avvia Cassa Oratorio al termine dell'installazione"
+    $cbAvvia.Text = "Avvia Cassa Dalila al termine dell'installazione"
     $cbAvvia.Left = 20; $cbAvvia.Top = 120; $cbAvvia.Width = 400; $cbAvvia.Height = 22
     $cbAvvia.Checked = $true
     $cbAvvia.BackColor = [System.Drawing.Color]::Transparent
@@ -276,7 +276,7 @@ function ShowProgress($installPath, $email, $password, $isUSB, $desktop) {
     # non dentro i blocchi event handler (Add_Shown, Add_Click, ecc.)
     $src = (Split-Path -Parent $MyInvocation.ScriptName).TrimEnd('\') + '\'
 
-    $f = MakeForm "Cassa Oratorio - Installazione in corso..." 540 460
+    $f = MakeForm "Cassa Dalila - Installazione in corso..." 540 460
     $f.ControlBox = $false
 
     $header = MakePanel $f 0 0 540 60 ([System.Drawing.Color]::FromArgb(26, 82, 118))
@@ -392,10 +392,10 @@ function ShowProgress($installPath, $email, $password, $isUSB, $desktop) {
             try {
                 $batPath = Join-Path $installPath "AVVIA_CASSA.bat"
                 $shell = New-Object -ComObject WScript.Shell
-                $shortcut = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Cassa Oratorio.lnk")
+                $shortcut = $shell.CreateShortcut("$env:USERPROFILE\Desktop\Cassa Dalila.lnk")
                 $shortcut.TargetPath = $batPath
                 $shortcut.WorkingDirectory = $installPath
-                $shortcut.Description = "Avvia Cassa Oratorio"
+                $shortcut.Description = "Avvia Cassa Dalila"
                 $shortcut.Save()
                 & $addLog "Collegamento desktop creato"
             } catch {
@@ -463,7 +463,7 @@ while ($true) {
                 }
 
                 [System.Windows.Forms.MessageBox]::Show(
-                    "Cassa Oratorio è stata installata in:`n$($locResult.path)`n`nUsa AVVIA_CASSA.bat per avviare la cassa.",
+                    "Cassa Dalila è stata installata in:`n$($locResult.path)`n`nUsa AVVIA_CASSA.bat per avviare la cassa.",
                     "Installazione completata",
                     [System.Windows.Forms.MessageBoxButtons]::OK,
                     [System.Windows.Forms.MessageBoxIcon]::Information

@@ -1,5 +1,5 @@
 @echo off
-title Importa Dati - Cassa Oratorio
+title Importa Dati - Cassa Dalila
 
 echo.
 echo  Importo famiglie, magazzini e prodotti in PocketBase...

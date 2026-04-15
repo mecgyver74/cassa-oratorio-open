@@ -101,7 +101,7 @@ export default function Statistiche() {
         td { padding: 6px 8px; border: 1px solid #ddd; font-size: 11px; }
         @media print { body { margin: 0; } }
       </style></head><body>
-      <h1>Statistiche Cassa Oratorio</h1>
+      <h1>Statistiche Cassa Dalila</h1>
       <p>Periodo: ${dal} — ${al} · Stampato: ${new Date().toLocaleString('it-IT')}</p>
       <div class="summary">
         <div class="card"><div class="card-label">Incasso netto</div><div class="card-val verde">${EUR(incasso)}</div></div>

@@ -85,7 +85,7 @@ function LoginPin({ onLogin }) {
         boxShadow: '0 20px 60px rgba(0,0,0,.4)', textAlign: 'center',
       }}>
         <div style={{ fontFamily: 'Barlow Condensed', fontWeight: 900, fontSize: 28, color: '#f59e0b', letterSpacing: 1, marginBottom: 4 }}>
-          CASSA <span style={{ color: 'var(--text2)', fontWeight: 400 }}>ORATORIO</span>
+          CASSA <span style={{ color: 'var(--text2)', fontWeight: 400 }}>DALILA</span>
         </div>
         <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 28 }}>Inserisci il tuo PIN per accedere</div>
 
@@ -190,7 +190,7 @@ export default function App() {
     <ToastProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <div className="topbar" style={{ flexWrap: "nowrap", overflowX: "auto" }}>
-          <div className="topbar-logo">CASSA <span>ORATORIO</span></div>
+          <div className="topbar-logo">CASSA <span>DALILA</span></div>
           <nav className="topbar-nav">
             {pagesVisibili.map(p => (
               <button key={p} className={`topbar-btn ${page === p ? 'active' : ''}`} onClick={() => setPage(p)}>
