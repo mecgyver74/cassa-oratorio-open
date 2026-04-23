@@ -1,8 +1,10 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-onRecordAfterCreateSuccess(function(e) {
+onRecordAfterUpdateSuccess(function(e) {
     try {
         var sess    = e.record
+        // Scatta solo quando chiusa_il viene valorizzata (non su altre modifiche)
+        if (!sess.getString("chiusa_il")) return
         var nome    = sess.getString("nome") || ("Sessione_" + sess.getInt("numero_sessione"))
         var numSess = sess.getInt("numero_sessione")
 
