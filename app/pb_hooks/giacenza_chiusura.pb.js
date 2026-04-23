@@ -19,6 +19,7 @@ onRecordAfterCreateSuccess((e) => {
 
 function eseguiGiacenza(sess) {
     const nome    = sess.getString("nome") || ("Sessione_" + sess.getInt("numero_sessione"))
+    console.log("[giacenza] avvio per sessione:", nome)
     const numSess = sess.getInt("numero_sessione")
 
     const now     = new Date()
@@ -120,12 +121,13 @@ function eseguiGiacenza(sess) {
 </body></html>`
 
     // ── 5. Salva su disco ──────────────────────────────────────
-    // __hooks = .../app/pb_hooks → ../../chiusure = radice progetto/chiusure
-    const cartella = __hooks + "/../../chiusure"
+    // $app.dataDir() = .../app/pb_data → ../../chiusure = radice progetto/chiusure
+    const cartella = $app.dataDir() + "/../../chiusure"
     const nomeFile = nome.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_")
+    console.log("[giacenza] cartella destinazione:", cartella)
     try { $os.mkdirAll(cartella, 0o755) } catch(err) { console.error("[giacenza] mkdir:", err) }
-    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".csv",  csvContent) } catch(err) { console.error("[giacenza] writeCSV:", err) }
-    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".html", html) }       catch(err) { console.error("[giacenza] writeHTML:", err) }
+    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".csv",  csvContent, 0o644); console.log("[giacenza] CSV salvato") } catch(err) { console.error("[giacenza] writeCSV:", err) }
+    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".html", html,       0o644); console.log("[giacenza] HTML salvato") } catch(err) { console.error("[giacenza] writeHTML:", err) }
 
     // ── 6. Email ──────────────────────────────────────────────
     let destinatari = []
