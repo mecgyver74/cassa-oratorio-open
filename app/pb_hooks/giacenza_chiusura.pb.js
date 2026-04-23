@@ -1,161 +1,149 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-/**
- * Alla chiusura cassa (creazione sessioni_cassa):
- * - Genera CSV e HTML con la giacenza aggiornata
- * - Salva i file in <radice_progetto>/chiusure/
- * - Invia email agli indirizzi configurati in Setup → Notifiche
- *
- * IMPORTANTE: tutto è in try/catch globale — errori nel hook non
- * devono mai propagarsi alla richiesta del client.
- */
-onRecordAfterCreateSuccess((e) => {
-    try {
-        eseguiGiacenza(e.record)
-    } catch (err) {
-        console.error("[giacenza_chiusura] Errore non gestito:", err)
-    }
-}, "sessioni_cassa")
+var esc = function(s) {
+    return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")
+}
 
-function eseguiGiacenza(sess) {
-    const nome    = sess.getString("nome") || ("Sessione_" + sess.getInt("numero_sessione"))
-    console.log("[giacenza] avvio per sessione:", nome)
-    const numSess = sess.getInt("numero_sessione")
+var csvEsc = function(s) {
+    return String(s||"").replace(/"/g,'""')
+}
 
-    const now     = new Date()
-    const pad     = n => String(n).padStart(2, "0")
-    const dataStr = now.getFullYear() + "-" + pad(now.getMonth()+1) + "-" + pad(now.getDate()) +
-                    " " + pad(now.getHours()) + ":" + pad(now.getMinutes())
+var eseguiGiacenza = function(sess) {
+    var nome    = sess.getString("nome") || ("Sessione_" + sess.getInt("numero_sessione"))
+    var numSess = sess.getInt("numero_sessione")
+
+    var now     = new Date()
+    var pad     = function(n) { return String(n).padStart(2, "0") }
+    var dataStr = now.getFullYear() + "-" + pad(now.getMonth()+1) + "-" + pad(now.getDate()) +
+                  " " + pad(now.getHours()) + ":" + pad(now.getMinutes())
 
     // ── 1. Magazzini comuni ────────────────────────────────────
-    let magComuni = []
+    var magComuni = []
     try {
         magComuni = $app.findRecordsByFilter("magazzini_comuni", "1=1", "nome", 0, 0)
-    } catch(err) { console.error("[giacenza] magazzini_comuni:", err) }
+    } catch(err) {}
 
-    // ── 2. Prodotti senza magazzino comune ─────────────────────
-    // Il campo magazzino_comune è una relazione: per filtrare i vuoti
-    // leggiamo tutti i prodotti attivi e filtriamo in JS.
-    let prodotti = []
+    // ── 2. Prodotti senza magazzino comune, filtrati in JS ─────
+    var prodotti = []
     try {
-        const tutti = $app.findRecordsByFilter(
-            "prodotti", "attivo=true", "ordine,nome", 0, 0
-        )
+        var tutti = $app.findRecordsByFilter("prodotti", "attivo=true", "ordine,nome", 0, 0)
         $app.expandRecords(tutti, ["famiglia"], null)
-        // Escludi quelli che hanno magazzino_comune valorizzato
-        prodotti = tutti.filter(p => !p.getString("magazzino_comune"))
-    } catch(err) { console.error("[giacenza] prodotti:", err) }
+        prodotti = tutti.filter(function(p) { return !p.getString("magazzino_comune") })
+    } catch(err) {}
 
-    // Raggruppa per famiglia rispettando l'ordine
-    const gruppi = {}
-    const ordineFamiglie = []
-    for (const p of prodotti) {
-        let famRec = null
+    // Raggruppa per famiglia
+    var gruppi = {}
+    var ordineFamiglie = []
+    for (var i = 0; i < prodotti.length; i++) {
+        var p = prodotti[i]
+        var famRec = null
         try { famRec = p.expandedOne("famiglia") } catch(_) {}
-        const famNome = famRec ? famRec.getString("nome") : "— Senza famiglia"
+        var famNome = famRec ? famRec.getString("nome") : "— Senza famiglia"
         if (!gruppi[famNome]) { gruppi[famNome] = []; ordineFamiglie.push(famNome) }
         gruppi[famNome].push(p)
     }
 
-    const qtyLabel = q => (q === -1 || q < 0) ? "∞" : String(q)
+    var qtyLabel = function(q) { return (q < 0) ? "\u221E" : String(q) }
 
-    // ── 3. CSV (BOM per Excel) ─────────────────────────────────
-    const csvRighe = ["\uFEFFSezione,Articolo,Giacenza"]
-    for (const m of magComuni) {
-        csvRighe.push(`"Magazzino comune","${csvEsc(m.getString("nome"))}","${qtyLabel(m.getInt("quantita"))}"`)
+    // ── 3. CSV con BOM per Excel ───────────────────────────────
+    var csvRighe = ["\uFEFFSezione,Articolo,Giacenza"]
+    for (var i = 0; i < magComuni.length; i++) {
+        var m = magComuni[i]
+        csvRighe.push('"Magazzino comune","' + csvEsc(m.getString("nome")) + '","' + qtyLabel(m.getInt("quantita")) + '"')
     }
-    for (const fam of ordineFamiglie) {
-        for (const p of gruppi[fam]) {
-            csvRighe.push(`"${csvEsc(fam)}","${csvEsc(p.getString("nome"))}","${qtyLabel(p.getInt("quantita"))}"`)
+    for (var f = 0; f < ordineFamiglie.length; f++) {
+        var fam = ordineFamiglie[f]
+        var lista = gruppi[fam]
+        for (var j = 0; j < lista.length; j++) {
+            var p2 = lista[j]
+            csvRighe.push('"' + csvEsc(fam) + '","' + csvEsc(p2.getString("nome")) + '","' + qtyLabel(p2.getInt("quantita")) + '"')
         }
     }
-    const csvContent = csvRighe.join("\r\n")
+    var csvContent = csvRighe.join("\r\n")
 
     // ── 4. HTML ────────────────────────────────────────────────
-    let righeHtml = ""
+    var righeHtml = ""
     if (magComuni.length > 0) {
-        righeHtml += `<tr class="sh"><td colspan="2">Magazzini comuni</td></tr>`
-        for (const m of magComuni) {
-            const qty = m.getInt("quantita")
-            const cls = qty === 0 ? ' class="zero"' : (qty > 0 && qty <= 3) ? ' class="low"' : ''
-            righeHtml += `<tr${cls}><td class="nome">${esc(m.getString("nome"))}</td><td class="qty">${qtyLabel(qty)}</td></tr>`
+        righeHtml += '<tr class="sh"><td colspan="2">Magazzini comuni</td></tr>'
+        for (var i = 0; i < magComuni.length; i++) {
+            var m = magComuni[i]
+            var qty = m.getInt("quantita")
+            var cls = qty === 0 ? ' class="zero"' : (qty > 0 && qty <= 3) ? ' class="low"' : ''
+            righeHtml += '<tr' + cls + '><td class="nome">' + esc(m.getString("nome")) + '</td><td class="qty">' + qtyLabel(qty) + '</td></tr>'
         }
     }
-    for (const fam of ordineFamiglie) {
-        righeHtml += `<tr class="sh"><td colspan="2">${esc(fam)}</td></tr>`
-        for (const p of gruppi[fam]) {
-            const qty = p.getInt("quantita")
-            const cls = qty === 0 ? ' class="zero"' : (qty > 0 && qty <= 3) ? ' class="low"' : ''
-            righeHtml += `<tr${cls}><td class="nome">${esc(p.getString("nome"))}</td><td class="qty">${qtyLabel(qty)}</td></tr>`
+    for (var f = 0; f < ordineFamiglie.length; f++) {
+        var fam = ordineFamiglie[f]
+        righeHtml += '<tr class="sh"><td colspan="2">' + esc(fam) + '</td></tr>'
+        var lista = gruppi[fam]
+        for (var j = 0; j < lista.length; j++) {
+            var p2 = lista[j]
+            var qty = p2.getInt("quantita")
+            var cls = qty === 0 ? ' class="zero"' : (qty > 0 && qty <= 3) ? ' class="low"' : ''
+            righeHtml += '<tr' + cls + '><td class="nome">' + esc(p2.getString("nome")) + '</td><td class="qty">' + qtyLabel(qty) + '</td></tr>'
         }
     }
 
-    const totale = [
-        ...magComuni.filter(m => m.getInt("quantita") >= 0),
-        ...prodotti.filter(p => p.getInt("quantita") >= 0),
-    ].reduce((s, r) => s + r.getInt("quantita"), 0)
+    var totale = 0
+    for (var i = 0; i < magComuni.length; i++) { var q = magComuni[i].getInt("quantita"); if (q >= 0) totale += q }
+    for (var i = 0; i < prodotti.length; i++)  { var q = prodotti[i].getInt("quantita");  if (q >= 0) totale += q }
 
-    const html = `<!DOCTYPE html>
-<html lang="it"><head><meta charset="UTF-8">
-<title>Giacenza — ${esc(nome)}</title>
-<style>
-  body{font-family:Arial,sans-serif;font-size:13px;color:#1e293b;max-width:680px;margin:30px auto;padding:0 20px}
-  h1{font-size:20px;margin:0 0 4px}
-  .sub{color:#64748b;font-size:12px;margin-bottom:24px}
-  table{width:100%;border-collapse:collapse}
-  td,th{padding:7px 10px;border-bottom:1px solid #e2e8f0}
-  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;border-bottom:2px solid #e2e8f0}
-  tr.sh td{background:#f1f5f9;font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.5px;padding:5px 10px;border-top:8px solid #fff}
-  .nome{width:75%}.qty{width:25%;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
-  tr.zero .qty{color:#dc2626}tr.low .qty{color:#d97706}
-  .tot{margin-top:20px;text-align:right;font-size:14px;font-weight:700;color:#0f172a}
-  @media print{body{margin:0}}
-</style></head><body>
-<h1>Giacenza Magazzino</h1>
-<div class="sub">Sessione #${numSess}: ${esc(nome)} — ${dataStr}</div>
-<table>
-  <tr><th class="nome">Articolo</th><th class="qty">Giacenza</th></tr>
-  ${righeHtml}
-</table>
-<div class="tot">Totale pezzi (escluso ∞): ${totale}</div>
-</body></html>`
+    var html = '<!DOCTYPE html>\n<html lang="it"><head><meta charset="UTF-8">\n' +
+        '<title>Giacenza \u2014 ' + esc(nome) + '</title>\n' +
+        '<style>\n' +
+        '  body{font-family:Arial,sans-serif;font-size:13px;color:#1e293b;max-width:680px;margin:30px auto;padding:0 20px}\n' +
+        '  h1{font-size:20px;margin:0 0 4px}.sub{color:#64748b;font-size:12px;margin-bottom:24px}\n' +
+        '  table{width:100%;border-collapse:collapse}\n' +
+        '  td,th{padding:7px 10px;border-bottom:1px solid #e2e8f0}\n' +
+        '  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;border-bottom:2px solid #e2e8f0}\n' +
+        '  tr.sh td{background:#f1f5f9;font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.5px;padding:5px 10px;border-top:8px solid #fff}\n' +
+        '  .nome{width:75%}.qty{width:25%;text-align:right;font-weight:700}\n' +
+        '  tr.zero .qty{color:#dc2626}tr.low .qty{color:#d97706}\n' +
+        '  .tot{margin-top:20px;text-align:right;font-size:14px;font-weight:700;color:#0f172a}\n' +
+        '  @media print{body{margin:0}}\n' +
+        '</style></head><body>\n' +
+        '<h1>Giacenza Magazzino</h1>\n' +
+        '<div class="sub">Sessione #' + numSess + ': ' + esc(nome) + ' \u2014 ' + dataStr + '</div>\n' +
+        '<table>\n  <tr><th class="nome">Articolo</th><th class="qty">Giacenza</th></tr>\n' +
+        righeHtml + '\n</table>\n' +
+        '<div class="tot">Totale pezzi (escluso \u221E): ' + totale + '</div>\n' +
+        '</body></html>'
 
     // ── 5. Salva su disco ──────────────────────────────────────
-    // $app.dataDir() = .../app/pb_data → ../../chiusure = radice progetto/chiusure
-    const cartella = $app.dataDir() + "/../../chiusure"
-    const nomeFile = nome.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_")
-    console.log("[giacenza] cartella destinazione:", cartella)
-    try { $os.mkdirAll(cartella, 0o755) } catch(err) { console.error("[giacenza] mkdir:", err) }
-    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".csv",  csvContent, 0o644); console.log("[giacenza] CSV salvato") } catch(err) { console.error("[giacenza] writeCSV:", err) }
-    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".html", html,       0o644); console.log("[giacenza] HTML salvato") } catch(err) { console.error("[giacenza] writeHTML:", err) }
+    var cartella = $app.dataDir() + "/../../chiusure"
+    var nomeFile = nome.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_")
+    try { $os.mkdirAll(cartella, 0o755) } catch(err) {}
+    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".csv",  csvContent, 0o644) } catch(err) {}
+    try { $os.writeFile(cartella + "/giacenza_" + nomeFile + ".html", html,       0o644) } catch(err) {}
 
     // ── 6. Email ──────────────────────────────────────────────
-    let destinatari = []
+    var destinatari = []
     try {
-        const conf = $app.findFirstRecordByFilter("configurazione", `chiave='chiusura_email_destinatari'`)
-        const val  = conf.get("valore")
-        const raw  = typeof val === "string" ? val : (Array.isArray(val) ? val.join(", ") : "")
-        destinatari = raw.split(",").map(s => s.trim()).filter(s => s.includes("@"))
-    } catch(_) { /* nessun destinatario configurato */ }
+        var conf = $app.findFirstRecordByFilter("configurazione", "chiave='chiusura_email_destinatari'")
+        var val  = conf.get("valore")
+        var raw  = typeof val === "string" ? val : (Array.isArray(val) ? val.join(", ") : "")
+        destinatari = raw.split(",").map(function(s) { return s.trim() }).filter(function(s) { return s.indexOf("@") >= 0 })
+    } catch(_) {}
 
     if (destinatari.length === 0) return
 
-    const senderAddr = $app.settings().meta.senderAddress
-    if (!senderAddr) { console.warn("[giacenza] SMTP non configurato"); return }
+    var senderAddr = $app.settings().meta.senderAddress
+    if (!senderAddr) return
 
     try {
-        const msg = new MailerMessage({
+        var msg = new MailerMessage({
             from:    { address: senderAddr, name: $app.settings().meta.senderName || "Cassa Dalila" },
-            to:      destinatari.map(a => ({ address: a })),
-            subject: `Giacenza magazzino — ${nome}`,
+            to:      destinatari.map(function(a) { return { address: a } }),
+            subject: "Giacenza magazzino \u2014 " + nome,
             html:    html,
             text:    csvContent,
         })
         $app.newMailClient().send(msg)
-    } catch(err) {
-        console.error("[giacenza] Email:", err)
-    }
+    } catch(err) {}
 }
 
-function esc(s)    { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;") }
-function csvEsc(s) { return String(s||"").replace(/"/g,'""') }
+onRecordAfterCreateSuccess(function(e) {
+    try {
+        eseguiGiacenza(e.record)
+    } catch(err) {}
+}, "sessioni_cassa")
