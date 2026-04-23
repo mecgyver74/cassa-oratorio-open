@@ -62,13 +62,13 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
       })
       const numSess = (lastSess.items[0]?.numero_sessione || 0) + 1
 
-      // Crea record sessione (senza chiusa_il: viene impostato dopo aver collegato gli scontrini,
-      // così la hook PocketBase può leggere le righe già linkate)
+      // Crea record sessione
       const data = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })
       const sess = await pb.collection('sessioni_cassa').create({
         numero_sessione: numSess,
         nome:            nomeSessione.trim() || `Sessione ${numSess} — ${data}`,
         aperta_il:       primaOra || new Date().toISOString(),
+        chiusa_il:       new Date().toISOString(),
         chiusa_da:       utente?.id || '',
         scontrini_count: validi.length,
         totale_netto:    totNetto,
@@ -86,9 +86,6 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
         done++
         setProgresso(Math.round(done / attivi.length * 100))
       }
-
-      // Imposta chiusa_il ora che tutti gli scontrini sono collegati → scatta la hook
-      await pb.collection('sessioni_cassa').update(sess.id, { chiusa_il: new Date().toISOString() })
 
       setSess(sess)
       setStep('done')

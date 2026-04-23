@@ -1,13 +1,8 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-onRecordAfterUpdateSuccess(function(e) {
-    var _dbg = $app.dataDir() + "/dbg_update_hook.txt"
-    try { $os.writeFile(_dbg, "hook fired: " + e.record.collection().name + " / chiusa_il=" + e.record.getString("chiusa_il") + " @ " + new Date().toISOString(), 0o644) } catch(_) {}
+onRecordAfterCreateSuccess(function(e) {
     try {
         var sess    = e.record
-        // Scatta solo quando chiusa_il viene valorizzata (non su altre modifiche)
-        if (!sess.getString("chiusa_il")) return
-        try { $os.writeFile(_dbg, "guard passed, sess=" + sess.id, 0o644) } catch(_) {}
         var nome    = sess.getString("nome") || ("Sessione_" + sess.getInt("numero_sessione"))
         var numSess = sess.getInt("numero_sessione")
 
@@ -62,11 +57,12 @@ onRecordAfterUpdateSuccess(function(e) {
         }
         var eur = function(v) { return "\u20AC "+v.toFixed(2).replace(".",",") }
 
-        // Venduto per prodotto (righe_scontrino della sessione, esclusi stornati)
+        // Venduto per prodotto — al momento del create, gli scontrini hanno ancora sessione=""
+        // perché il frontend non ha ancora avviato il loop di collegamento
         var vendutoMap = {}, vendutoOrder = []
         try {
             var righe = $app.findRecordsByFilter("righe_scontrino",
-                "scontrino.sessione='"+sess.id+"' && scontrino.stornato=false && stornata=false",
+                "scontrino.sessione='' && scontrino.stornato=false && stornata=false",
                 "nome_snapshot", 0, 0)
             for (var i=0; i<righe.length; i++) {
                 var r = righe[i]
