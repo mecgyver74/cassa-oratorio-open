@@ -41,8 +41,36 @@ onRecordAfterCreateSuccess(function(e) {
             gruppi[fn].push(prod[i])
         }
 
+        // Dati riepilogo sessione
+        var scCount   = sess.getInt("scontrini_count")
+        var totNetto  = sess.getFloat("totale_netto")
+        var totCont   = sess.getFloat("totale_contanti")
+        var totCarta  = sess.getFloat("totale_carta")
+        var totOmaggi = sess.getFloat("totale_omaggi")
+        var primoN    = sess.getInt("primo_numero")
+        var ultimoN   = sess.getInt("ultimo_numero")
+        var apertaIl  = sess.getString("aperta_il")
+        var chiusaIl  = sess.getString("chiusa_il")
+        var fmtData   = function(iso) {
+            if (!iso) return ""
+            try { var d=new Date(iso); return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes()) } catch(_) { return iso }
+        }
+        var eur = function(v) { return "\u20AC "+v.toFixed(2).replace(".",",") }
+
         // CSV
-        var csv = ["\uFEFFSezione,Articolo,Giacenza"]
+        var csv = ["\uFEFFRiepilogo Cassa"]
+        csv.push('"Sessione #'+numSess+'","'+csvE(nome)+'"')
+        csv.push('"Aperta il","'+fmtData(apertaIl)+'"')
+        csv.push('"Chiusa il","'+fmtData(chiusaIl)+'"')
+        csv.push('"Scontrini emessi","'+scCount+'"')
+        csv.push('"Dal numero","'+primoN+'"')
+        csv.push('"Al numero","'+ultimoN+'"')
+        csv.push('"Totale netto","'+eur(totNetto)+'"')
+        csv.push('"Contanti","'+eur(totCont)+'"')
+        csv.push('"Carta","'+eur(totCarta)+'"')
+        csv.push('"Omaggi","'+eur(totOmaggi)+'"')
+        csv.push("")
+        csv.push("Sezione,Articolo,Giacenza")
         for (var i=0; i<mc.length; i++)
             csv.push('"Magazzino comune","'+csvE(mc[i].getString("nome"))+'","'+qty(mc[i].getInt("quantita"))+'"')
         for (var f=0; f<famOrder.length; f++) {
@@ -74,7 +102,19 @@ onRecordAfterCreateSuccess(function(e) {
         for (var i=0; i<mc.length; i++)   { var q=mc[i].getInt("quantita");   if(q>=0) tot+=q }
         for (var i=0; i<prod.length; i++)  { var q=prod[i].getInt("quantita"); if(q>=0) tot+=q }
 
-        var html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Giacenza</title><style>' +
+        var riepilogoHtml =
+            '<h2 style="font-size:16px;margin:0 0 12px;color:#1e293b">Riepilogo chiusura cassa</h2>' +
+            '<table style="width:100%;border-collapse:collapse;margin-bottom:32px">' +
+            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Aperta il</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+fmtData(apertaIl)+'</td></tr>' +
+            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Chiusa il</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+fmtData(chiusaIl)+'</td></tr>' +
+            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Scontrini emessi</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+scCount+' (dal n.'+primoN+' al n.'+ultimoN+')</td></tr>' +
+            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Totale netto</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#16a34a">'+eur(totNetto)+'</td></tr>' +
+            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui contanti</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totCont)+'</td></tr>' +
+            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui carta</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totCarta)+'</td></tr>' +
+            '<tr><td style="padding:5px 10px;color:#475569">di cui omaggi</td><td style="padding:5px 10px;font-weight:700">'+eur(totOmaggi)+'</td></tr>' +
+            '</table>'
+
+        var html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Chiusura Cassa</title><style>' +
             'body{font-family:Arial,sans-serif;font-size:13px;color:#1e293b;max-width:680px;margin:30px auto;padding:0 20px}' +
             'h1{font-size:20px;margin:0 0 4px}.sub{color:#64748b;font-size:12px;margin-bottom:24px}' +
             'table{width:100%;border-collapse:collapse}td,th{padding:7px 10px;border-bottom:1px solid #e2e8f0}' +
@@ -85,8 +125,10 @@ onRecordAfterCreateSuccess(function(e) {
             '.tot{margin-top:20px;text-align:right;font-size:14px;font-weight:700}' +
             '@media print{body{margin:0}}' +
             '</style></head><body>' +
-            '<h1>Giacenza Magazzino</h1>' +
-            '<div class="sub">Sessione #'+numSess+': '+esc(nome)+' \u2014 '+data+'</div>' +
+            '<h1>Chiusura Cassa \u2014 Sessione #'+numSess+'</h1>' +
+            '<div class="sub">'+esc(nome)+' \u2014 '+data+'</div>' +
+            riepilogoHtml +
+            '<h2 style="font-size:16px;margin:0 0 12px;color:#1e293b">Giacenza magazzino</h2>' +
             '<table><tr><th class="n">Articolo</th><th class="q">Giacenza</th></tr>' +
             rows + '</table>' +
             '<div class="tot">Totale pezzi (escluso \u221E): '+tot+'</div>' +
