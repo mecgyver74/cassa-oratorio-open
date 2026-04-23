@@ -1,10 +1,13 @@
 /// <reference path="../pb_data/types.d.ts" />
 
 onRecordAfterUpdateSuccess(function(e) {
+    var _dbg = $app.dataDir() + "/dbg_update_hook.txt"
+    try { $os.writeFile(_dbg, "hook fired: " + e.record.collection().name + " / chiusa_il=" + e.record.getString("chiusa_il") + " @ " + new Date().toISOString(), 0o644) } catch(_) {}
     try {
         var sess    = e.record
         // Scatta solo quando chiusa_il viene valorizzata (non su altre modifiche)
         if (!sess.getString("chiusa_il")) return
+        try { $os.writeFile(_dbg, "guard passed, sess=" + sess.id, 0o644) } catch(_) {}
         var nome    = sess.getString("nome") || ("Sessione_" + sess.getInt("numero_sessione"))
         var numSess = sess.getInt("numero_sessione")
 
