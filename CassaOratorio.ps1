@@ -45,6 +45,73 @@ Write-Host "  |       CASSA DALILA  v1.0.0              |" -ForegroundColor Yell
 Write-Host "  +=============================================+" -ForegroundColor Yellow
 Write-Host ""
 
+# ── Lock file: impedisce doppio avvio ────────────────────────
+$LockFile = Join-Path $Root "_cassa.lock"
+
+function LeggiLock {
+    if (Test-Path $LockFile) {
+        try { return Get-Content $LockFile -Raw | ConvertFrom-Json } catch { }
+    }
+    return $null
+}
+function ScriviLock($ip) {
+    [PSCustomObject]@{ hostname=$env:COMPUTERNAME; ip=$ip; port=$PB_PORT; avviato=(Get-Date -Format "dd/MM/yyyy HH:mm:ss") } |
+        ConvertTo-Json | Set-Content $LockFile -Encoding UTF8
+}
+function EliminaLock { Remove-Item $LockFile -Force -EA SilentlyContinue }
+
+$lock = LeggiLock
+if ($lock) {
+    $urlCheck = "http://$($lock.ip):$($lock.port)/api/health"
+    $attivo = $false
+    try {
+        $r = Invoke-WebRequest -Uri $urlCheck -UseBasicParsing -TimeoutSec 3 -EA Stop
+        if ($r.StatusCode -eq 200) { $attivo = $true }
+    } catch { }
+
+    if ($attivo) {
+        Write-Host ""
+        Write-Host "  +=============================================+" -ForegroundColor Red
+        Write-Host "  |   CASSA GIA' IN ESECUZIONE!               |" -ForegroundColor Red
+        Write-Host "  +=============================================+" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  Server attivo su: $($lock.hostname)" -ForegroundColor Yellow
+        Write-Host "  Avviato il:       $($lock.avviato)" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Per usare la cassa apri il browser su:" -ForegroundColor White
+        Write-Host "  --> http://$($lock.ip):$($lock.port)" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "  NON avviare un secondo server!" -ForegroundColor Red
+        Write-Host "  (due istanze sullo stesso database causano corruzione dati)" -ForegroundColor DarkYellow
+        Write-Host ""
+        Read-Host "  Premi INVIO per uscire"
+        exit 0
+    } elseif ($lock.hostname -ne $env:COMPUTERNAME) {
+        # Lock da altro PC: non rimuovere automaticamente, potrebbe essere un problema di rete/firewall
+        Write-Host ""
+        Write-Host "  +=============================================+" -ForegroundColor Red
+        Write-Host "  |   CASSA BLOCCATA DA ALTRO PC!             |" -ForegroundColor Red
+        Write-Host "  +=============================================+" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  Il PC '$($lock.hostname)' ha avviato la cassa" -ForegroundColor Yellow
+        Write-Host "  Avviato il: $($lock.avviato)" -ForegroundColor Yellow
+        Write-Host "  IP registrato: $($lock.ip):$($lock.port)" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Il server non risponde, ma potrebbe essere un problema di rete." -ForegroundColor DarkYellow
+        Write-Host "  Assicurati che la cassa sia chiusa su '$($lock.hostname)'" -ForegroundColor White
+        Write-Host "  prima di avviarla qui." -ForegroundColor White
+        Write-Host ""
+        Write-Host "  Se sei SICURO che la cassa e' spenta su quell'altro PC," -ForegroundColor White
+        $risposta = Read-Host "  digita FORZA e premi INVIO (oppure solo INVIO per uscire)"
+        if ($risposta.Trim().ToUpper() -ne "FORZA") { exit 0 }
+        LogWarn "Avvio forzato dall'utente: lock di '$($lock.hostname)' rimosso"
+        EliminaLock
+    } else {
+        LogWarn "Lock file obsoleto (crash locale su questo PC) - rimozione e riavvio"
+        EliminaLock
+    }
+}
+
 # ── Controllo percorso cloud ─────────────────────────────────
 if ($Root -match "Google Drive|OneDrive|Dropbox|iCloud") {
     Write-Host "  ATTENZIONE: cartella su cloud storage!" -ForegroundColor Red
@@ -230,6 +297,17 @@ Pannello admin database:<br>
 
 # pb_public è già aggiornato sopra
 
+# ── Rileva IP locale (serve per lock e per browser) ──────────
+$localIP = $null
+$ips = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^127\.' }).IPAddress
+foreach ($ip in $ips) {
+    if ($ip -match '^192\.168\.' -or $ip -match '^10\.' -or $ip -match '^172\.(1[6-9]|2[0-9]|3[01])\.') {
+        $localIP = $ip; break
+    }
+}
+if (-not $localIP -and $ips) { $localIP = $ips | Select-Object -First 1 }
+if (-not $localIP) { $localIP = "127.0.0.1" }
+
 # ── FASE 5: Avvia PocketBase ─────────────────────────────────
 # Termina eventuale istanza precedente rimasta attiva
 Get-Process -Name "pocketbase" -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
@@ -262,19 +340,11 @@ if (-not (WaitPB 120)) {
 }
 LogOK "Database attivo su http://127.0.0.1:$PB_PORT"
 
+# Scrivi lock: da questo momento siamo il server ufficiale
+ScriviLock $localIP
+Log "Lock scritto: $localIP"
+
 # ── FASE 6: Apri browser con IP di rete ─────────────────────
-# Rileva IP locale per aprire direttamente l'URL di rete
-# Trova IP locale preferendo range 192.168.x.x o 10.x.x.x
-$localIP = $null
-$ips = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^127\.' }).IPAddress
-foreach ($ip in $ips) {
-    if ($ip -match '^192\.168\.' -or $ip -match '^10\.' -or $ip -match '^172\.(1[6-9]|2[0-9]|3[01])\.') {
-        $localIP = $ip
-        break
-    }
-}
-if (-not $localIP -and $ips) { $localIP = $ips | Select-Object -First 1 }
-if (-not $localIP) { $localIP = "127.0.0.1" }
 $browserUrl = "http://${localIP}:$PB_PORT"
 Start-Process $browserUrl
 LogOK "Browser aperto: $browserUrl"
@@ -336,6 +406,7 @@ try {
     }
 } finally {
     Log "Chiusura..."
+    EliminaLock
     if ($listener) { try { $listener.Stop() } catch { } }
     # Chiudi PocketBase e la finestra cmd che lo contiene
     if ($pbProc) {

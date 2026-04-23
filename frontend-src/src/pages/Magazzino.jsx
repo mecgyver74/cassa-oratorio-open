@@ -61,15 +61,21 @@ export default function Magazzino() {
     try {
       if (tipo === 'comune') {
         await pb.collection('magazzini_comuni').update(id, { quantita: v })
-        await pb.collection('movimenti_magazzino').create({ magazzino_comune: id, tipo: 'rettifica', quantita: v, note: 'Rettifica manuale' })
       } else {
         await pb.collection('prodotti').update(id, { quantita: v })
+      }
+    } catch(e) { toast('Errore: ' + e.message, 'r'); return }
+    // Il movimento è opzionale: PocketBase rifiuta quantita=0 su campo required
+    try {
+      if (tipo === 'comune') {
+        await pb.collection('movimenti_magazzino').create({ magazzino_comune: id, tipo: 'rettifica', quantita: v, note: 'Rettifica manuale' })
+      } else {
         await pb.collection('movimenti_magazzino').create({ prodotto: id, tipo: 'rettifica', quantita: v, note: 'Rettifica manuale' })
       }
-      if (inputRefs.current[id]) inputRefs.current[id].value = ''
-      toast('Rettifica applicata', 'b')
-      carica()
-    } catch(e) { toast('Errore: ' + e.message, 'r') }
+    } catch(_) { /* ignora: quantita=0 fallisce validazione PocketBase ma la rettifica è avvenuta */ }
+    if (inputRefs.current[id]) inputRefs.current[id].value = ''
+    toast('Rettifica applicata', 'b')
+    carica()
   }
 
   const MagCard = ({ id, nome, quantita, soglia, tipo }) => {

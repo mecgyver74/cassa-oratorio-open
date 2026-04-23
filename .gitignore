@@ -17,6 +17,9 @@ frontend-src/node_modules/
 # Backup dati utente
 backup/
 
+# File temporanei simulazione dati
+._seed_ids.json
+
 # File temporanei e build artifacts
 CassaOratorio.zip
 *.tmp

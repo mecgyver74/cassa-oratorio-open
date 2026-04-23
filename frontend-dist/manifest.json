@@ -1,7 +1,7 @@
 {
-  "name": "Cassa Oratorio",
+  "name": "Cassa Dalila",
   "short_name": "Cassa",
-  "description": "Sistema cassa per oratorio",
+  "description": "Sistema cassa Dalila",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d1117",
