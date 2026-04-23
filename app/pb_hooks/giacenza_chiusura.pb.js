@@ -57,6 +57,22 @@ onRecordAfterCreateSuccess(function(e) {
         }
         var eur = function(v) { return "\u20AC "+v.toFixed(2).replace(".",",") }
 
+        // Venduto per prodotto (righe_scontrino della sessione, esclusi stornati)
+        var vendutoMap = {}, vendutoOrder = []
+        try {
+            var righe = $app.findRecordsByFilter("righe_scontrino",
+                "scontrino.sessione='"+sess.id+"' && scontrino.stornato=false && stornata=false",
+                "nome_snapshot", 0, 0)
+            for (var i=0; i<righe.length; i++) {
+                var r = righe[i]
+                var k = r.getString("nome_snapshot")
+                if (!vendutoMap[k]) { vendutoMap[k] = {nome:k, qta:0, omaggi:0, tot:0}; vendutoOrder.push(k) }
+                if (r.getBool("omaggio")) vendutoMap[k].omaggi += r.getInt("quantita")
+                else { vendutoMap[k].qta += r.getInt("quantita"); vendutoMap[k].tot += r.getFloat("totale_riga") }
+            }
+            vendutoOrder.sort(function(a,b){ return vendutoMap[b].tot - vendutoMap[a].tot })
+        } catch(_) {}
+
         // CSV
         var csv = ["\uFEFFRiepilogo Cassa"]
         csv.push('"Sessione #'+numSess+'","'+csvE(nome)+'"')
@@ -69,6 +85,16 @@ onRecordAfterCreateSuccess(function(e) {
         csv.push('"Contanti","'+eur(totCont)+'"')
         csv.push('"Carta","'+eur(totCarta)+'"')
         csv.push('"Omaggi","'+eur(totOmaggi)+'"')
+        csv.push("")
+        csv.push("Venduto per prodotto")
+        csv.push("Prodotto,Qta totale,di cui omaggi,Qta pagata,Totale")
+        var totVqta=0, totVomaggi=0, totVpagata=0
+        for (var i=0; i<vendutoOrder.length; i++) {
+            var v = vendutoMap[vendutoOrder[i]]
+            totVqta += v.qta+v.omaggi; totVomaggi += v.omaggi; totVpagata += v.qta
+            csv.push('"'+csvE(v.nome)+'",'+(v.qta+v.omaggi)+','+v.omaggi+','+v.qta+',"'+eur(v.tot)+'"')
+        }
+        csv.push('"TOTALE",'+totVqta+','+totVomaggi+','+totVpagata+',"'+eur(totNetto)+'"')
         csv.push("")
         csv.push("Sezione,Articolo,Giacenza")
         for (var i=0; i<mc.length; i++)
@@ -102,6 +128,13 @@ onRecordAfterCreateSuccess(function(e) {
         for (var i=0; i<mc.length; i++)   { var q=mc[i].getInt("quantita");   if(q>=0) tot+=q }
         for (var i=0; i<prod.length; i++)  { var q=prod[i].getInt("quantita"); if(q>=0) tot+=q }
 
+        var vendutoRows = ""
+        for (var i=0; i<vendutoOrder.length; i++) {
+            var v = vendutoMap[vendutoOrder[i]]
+            vendutoRows += '<tr><td>'+esc(v.nome)+'</td><td style="text-align:right">'+(v.qta+v.omaggi)+'</td><td style="text-align:right">'+(v.omaggi||'—')+'</td><td style="text-align:right">'+v.qta+'</td><td style="text-align:right;font-weight:700">'+eur(v.tot)+'</td></tr>'
+        }
+        vendutoRows += '<tr style="background:#f1f5f9;font-weight:700"><td>TOTALE</td><td style="text-align:right">'+totVqta+'</td><td style="text-align:right">'+totVomaggi+'</td><td style="text-align:right">'+totVpagata+'</td><td style="text-align:right;color:#16a34a">'+eur(totNetto)+'</td></tr>'
+
         var riepilogoHtml =
             '<h2 style="font-size:16px;margin:0 0 12px;color:#1e293b">Riepilogo chiusura cassa</h2>' +
             '<table style="width:100%;border-collapse:collapse;margin-bottom:32px">' +
@@ -128,6 +161,9 @@ onRecordAfterCreateSuccess(function(e) {
             '<h1>Chiusura Cassa \u2014 Sessione #'+numSess+'</h1>' +
             '<div class="sub">'+esc(nome)+' \u2014 '+data+'</div>' +
             riepilogoHtml +
+            '<h2 style="font-size:16px;margin:0 0 12px;color:#1e293b">Venduto per prodotto</h2>' +
+            '<table style="margin-bottom:32px"><tr><th>Prodotto</th><th style="text-align:right">Qtà tot.</th><th style="text-align:right">Omaggi</th><th style="text-align:right">Qtà pag.</th><th style="text-align:right">Totale</th></tr>' +
+            vendutoRows + '</table>' +
             '<h2 style="font-size:16px;margin:0 0 12px;color:#1e293b">Giacenza magazzino</h2>' +
             '<table><tr><th class="n">Articolo</th><th class="q">Giacenza</th></tr>' +
             rows + '</table>' +
@@ -171,7 +207,7 @@ onRecordAfterCreateSuccess(function(e) {
                 var msg = new MailerMessage({
                     from:    { address: sender, name: $app.settings().meta.senderName || "Cassa Dalila" },
                     to:      to,
-                    subject: "Giacenza magazzino \u2014 " + nome,
+                    subject: "Chiusura cassa \u2014 Sessione #" + numSess + ": " + nome,
                     html:    html,
                     text:    csvContent,
                 })
