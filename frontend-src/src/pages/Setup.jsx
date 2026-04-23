@@ -12,7 +12,7 @@ export default function Setup() {
     <div className="page-pad">
       <div className="page-title">⚙️ Setup</div>
       <div className="prodotti-tabs" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex' }}>
-        {[['prodotti','Prodotti'],['famiglie','Famiglie'],['magcomuni','Magazzini comuni'],['comande','Comande'],['menu','Menù'],['utenti','Utenti'],['display','Aspetto']].map(([k,l]) => (
+        {[['prodotti','Prodotti'],['famiglie','Famiglie'],['magcomuni','Magazzini comuni'],['comande','Comande'],['menu','Menù'],['utenti','Utenti'],['display','Aspetto'],['notifiche','Notifiche']].map(([k,l]) => (
           <button key={k} className={`prodotti-tab ${tab===k?'active':''}`} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -23,6 +23,7 @@ export default function Setup() {
       {tab === 'menu' && <TabMenu toast={toast} />}
       {tab === 'utenti' && <TabUtenti toast={toast} />}
       {tab === 'display' && <TabDisplay toast={toast} />}
+      {tab === 'notifiche' && <TabNotifiche toast={toast} />}
     </div>
   )
 }
@@ -508,15 +509,17 @@ function TabDisplay({ toast }) {
 
   // Anteprima bottone prodotto con le impostazioni correnti
   const Preview = () => {
-    const nomeSz = cfg.nomeFontSize ?? 14
-    const prezzoSz = cfg.prezzoFontSize ?? 12
-    const altezza = cfg.btnHeight ?? 90
-    const larghezza = cfg.btnWidth ?? 130
-    const colNome    = cfg.colNome    ?? '#ffffff'
-    const colPrezzo  = cfg.colPrezzo  ?? '#ffffff'
-    const colGiacenza = cfg.colGiacenza ?? '#ffffffaa'
-    const gapX = cfg.gapX ?? 6
-    const gapY = cfg.gapY ?? 6
+    const nomeSz      = cfg.nomeFontSize     ?? 14
+    const prezzoSz    = cfg.prezzoFontSize   ?? 12
+    const giacenzaSz  = cfg.giacenzaFontSize ?? 10
+    const altezza     = cfg.btnHeight        ?? 90
+    const larghezza   = cfg.btnWidth         ?? 130
+    const colNome     = cfg.colNome          ?? '#ffffff'
+    const colPrezzo   = cfg.colPrezzo        ?? '#ffffff'
+    const colGiacenza = cfg.colGiacenza      ?? '#ffffffaa'
+    const gapX        = cfg.gapX            ?? 6
+    const gapY        = cfg.gapY            ?? 6
+    const lineGap     = cfg.lineGap          ?? 4
     return (
       <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: gapX, rowGap: gapY, margin: '16px 0' }}>
         {[
@@ -527,11 +530,12 @@ function TabDisplay({ toast }) {
           <div key={i} style={{
             background: p.colore, borderRadius: 10, padding: '8px 10px',
             width: larghezza, height: altezza, display: 'flex', flexDirection: 'column',
-            justifyContent: 'space-between', boxShadow: `0 3px 10px ${p.colore}44`, flexShrink: 0
+            justifyContent: 'center', gap: lineGap,
+            boxShadow: `0 3px 10px ${p.colore}44`, flexShrink: 0
           }}>
             <div style={{ fontSize: nomeSz, fontWeight: 700, lineHeight: 1.2, color: colNome }}>{p.nome}</div>
             <div style={{ fontSize: prezzoSz, fontWeight: 600, color: colPrezzo }}>{p.prezzo}</div>
-            <div style={{ fontSize: 10, color: colGiacenza }}>{p.scorta}</div>
+            <div style={{ fontSize: giacenzaSz, color: colGiacenza }}>{p.scorta}</div>
           </div>
         ))}
       </div>
@@ -553,10 +557,36 @@ function TabDisplay({ toast }) {
 
           <Slider label="Dimensione nome prodotto" k="nomeFontSize" min={10} max={24} defaultVal={14} unit="px" />
           <Slider label="Dimensione prezzo" k="prezzoFontSize" min={9} max={20} defaultVal={12} unit="px" />
+          <Slider label="Dimensione scorta" k="giacenzaFontSize" min={7} max={18} defaultVal={10} unit="px" />
+          <Slider label="Interlinea (spazio tra righe)" k="lineGap" min={0} max={20} defaultVal={4} unit="px" />
           <Slider label="Altezza pulsante" k="btnHeight" min={60} max={180} defaultVal={90} unit="px" />
           <Slider label="Larghezza pulsante" k="btnWidth" min={80} max={220} defaultVal={130} unit="px" />
           <Slider label="Spaziatura orizzontale" k="gapX" min={2} max={24} defaultVal={6} unit="px" />
           <Slider label="Spaziatura verticale" k="gapY" min={2} max={24} defaultVal={6} unit="px" />
+
+          <Row label="Aggiornamento automatico giacenze" help="Aggiorna le scorte in cassa senza azioni utente">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 400, whiteSpace: 'nowrap' }}>
+                <input type="checkbox"
+                  checked={(cfg.refreshInterval ?? 30) === -1}
+                  onChange={e => set('refreshInterval', e.target.checked ? -1 : 30)} />
+                Mai (disattivato)
+              </label>
+              {(cfg.refreshInterval ?? 30) !== -1 && (
+                <>
+                  <input type="range" min={5} max={300} step={5}
+                    value={cfg.refreshInterval ?? 30}
+                    onChange={e => set('refreshInterval', parseInt(e.target.value))}
+                    style={{ flex: 1, minWidth: 80 }} />
+                  <span style={{ minWidth: 56, textAlign: 'center', fontFamily: 'Barlow Condensed',
+                    fontWeight: 800, fontSize: 18, background: 'var(--surf2)',
+                    border: '1px solid var(--border)', borderRadius: 6, padding: '2px 6px', color: 'var(--text)' }}>
+                    {cfg.refreshInterval ?? 30}s
+                  </span>
+                </>
+              )}
+            </div>
+          </Row>
 
           <Row label="Colore nome prodotto">
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -612,6 +642,70 @@ function TabDisplay({ toast }) {
           <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
             Le impostazioni sono salvate sul browser. Torna alla Cassa per vederle applicate.
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── TAB NOTIFICHE ─────────────────────────────────────────────────────────────
+function TabNotifiche({ toast }) {
+  const CHIAVE = 'chiusura_email_destinatari'
+  const [emails, setEmails] = useState('')
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    getConf(CHIAVE, '').then(v => {
+      setEmails(Array.isArray(v) ? v.join(', ') : (v || ''))
+      setLoaded(true)
+    })
+  }, [])
+
+  const salva = async () => {
+    const lista = emails.split(/[,;\n]/).map(s => s.trim()).filter(s => s.includes('@'))
+    await setConf(CHIAVE, lista.join(', '))
+    toast('Destinatari salvati', 'v')
+  }
+
+  const inpStyle = {
+    width: '100%', boxSizing: 'border-box', padding: '9px 12px', fontSize: 13,
+    background: 'var(--surf2)', border: '1px solid var(--border)',
+    borderRadius: 8, color: 'var(--text)', resize: 'vertical', minHeight: 80,
+    fontFamily: 'inherit',
+  }
+
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <div className="setup-box">
+        <div className="setup-box-head"><h3>Notifiche chiusura cassa</h3></div>
+        <div className="setup-form">
+
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', display: 'block', marginBottom: 6 }}>
+              Indirizzi email destinatari
+            </label>
+            <textarea
+              value={loaded ? emails : ''}
+              onChange={e => setEmails(e.target.value)}
+              placeholder={'mario@esempio.it, luigi@esempio.it'}
+              style={inpStyle}
+            />
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6, lineHeight: 1.6 }}>
+              Separati da virgola. Ad ogni chiusura cassa verrà inviata un'email
+              con la giacenza aggiornata (CSV in allegato e report HTML nel testo).
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(234,179,8,.08)', border: '1px solid rgba(234,179,8,.3)',
+            borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--text2)',
+            lineHeight: 1.6, marginBottom: 18 }}>
+            <b>Requisito:</b> configurare un server SMTP in <b>PocketBase Admin → Settings → Mail settings</b>.
+            Senza SMTP le email non vengono inviate, ma i file vengono comunque salvati in <code>chiusure/</code>.
+          </div>
+
+          <button className="btn-salva" onClick={salva} style={{ width: '100%' }}>
+            Salva destinatari
+          </button>
         </div>
       </div>
     </div>
