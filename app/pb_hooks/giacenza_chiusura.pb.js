@@ -31,10 +31,11 @@ onRecordAfterCreateSuccess(function(e) {
             }
         } catch(_) {}
 
-        // Raggruppa per famiglia
+        // Raggruppa per famiglia (escludi famiglie inattive)
         var gruppi = {}, famOrder = []
         for (var i=0; i<prod.length; i++) {
             var fr = null; try { fr = prod[i].expandedOne("famiglia") } catch(_) {}
+            if (fr && !fr.getBool("attivo")) continue
             var fn = fr ? fr.getString("nome") : "— Senza famiglia"
             if (!gruppi[fn]) { gruppi[fn]=[]; famOrder.push(fn) }
             gruppi[fn].push(prod[i])
@@ -99,35 +100,46 @@ onRecordAfterCreateSuccess(function(e) {
         try { $os.writeFile(dir+"/giacenza_"+nomeFile+".html", html,       0o644) } catch(_) {}
 
         // Email
+        var emailLog = ""
         var dest = []
         try {
             var conf = $app.findFirstRecordByFilter("configurazione","chiave='chiusura_email_destinatari'")
             var raw  = conf.get("valore")
+            emailLog += "valore raw: " + JSON.stringify(raw) + "\n"
+            // PocketBase restituisce i campi JSON come array di byte: convertiamo
+            if (Array.isArray(raw)) {
+                try { raw = JSON.parse(String.fromCharCode.apply(null, raw)) } catch(_) { raw = "" }
+            }
             raw = typeof raw==="string" ? raw : (Array.isArray(raw) ? raw.join(",") : "")
             var parts = raw.split(",")
             for (var i=0; i<parts.length; i++) {
                 var a = parts[i].trim()
                 if (a.indexOf("@")>=0) dest.push(a)
             }
-        } catch(_) {}
+            emailLog += "destinatari: " + dest.join(", ") + "\n"
+        } catch(err) { emailLog += "errore config: " + String(err) + "\n" }
 
-        if (dest.length > 0) {
-            var sender = $app.settings().meta.senderAddress
-            if (sender) {
-                try {
-                    var to = []
-                    for (var i=0; i<dest.length; i++) to.push({ address: dest[i] })
-                    var msg = new MailerMessage({
-                        from:    { address: sender, name: $app.settings().meta.senderName || "Cassa Dalila" },
-                        to:      to,
-                        subject: "Giacenza magazzino \u2014 " + nome,
-                        html:    html,
-                        text:    csvContent,
-                    })
-                    $app.newMailClient().send(msg)
-                } catch(_) {}
-            }
+        var sender = $app.settings().meta.senderAddress
+        emailLog += "senderAddress: " + sender + "\n"
+
+        if (dest.length > 0 && sender) {
+            try {
+                var to = []
+                for (var i=0; i<dest.length; i++) to.push({ address: dest[i] })
+                var msg = new MailerMessage({
+                    from:    { address: sender, name: $app.settings().meta.senderName || "Cassa Dalila" },
+                    to:      to,
+                    subject: "Giacenza magazzino \u2014 " + nome,
+                    html:    html,
+                    text:    csvContent,
+                })
+                $app.newMailClient().send(msg)
+                emailLog += "email inviata OK\n"
+            } catch(err) { emailLog += "errore invio: " + String(err) + "\n" }
+        } else {
+            emailLog += "skip: dest=" + dest.length + " sender=" + (sender?"ok":"vuoto") + "\n"
         }
+        try { $os.writeFile(dir+"/email_log.txt", emailLog, 0o644) } catch(_) {}
 
     } catch(_) {}
 
