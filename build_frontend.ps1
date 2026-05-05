@@ -59,18 +59,19 @@ try {
 
 if (-not (Test-Path $DistTemp)) { Fail "Cartella dist non trovata in $TempDir" }
 
-# ── 4. Pulizia destinazioni (solo assets/ per rimuovere vecchi bundle) ───
-Step 4 "Pulizia vecchi bundle JS..."
+# ── 4. Pulizia vecchi bundle nelle tre destinazioni ──────────
+Step 4 "Pulizia vecchi bundle JS/CSS..."
 foreach ($dest in @($DestPublic, $DestFrontDist, $DestSrcDist)) {
-    $old = Join-Path $dest "assets"
-    if (Test-Path $old) { Remove-Item $old -Recurse -Force }
+    $assetsDir = Join-Path $dest "assets"
+    if (Test-Path $assetsDir) { Remove-Item $assetsDir -Recurse -Force }
 }
 OK "Vecchi bundle rimossi"
 
 # ── 5. Copia dist nelle tre destinazioni ─────────────────────
+# /IS = sovrascrivi anche file con stesso timestamp (necessario con Google Drive)
 Step 5 "Deploy in:"
 foreach ($dest in @($DestPublic, $DestFrontDist, $DestSrcDist)) {
-    robocopy $DistTemp $dest /E /NJH /NJS /NFL /NDL | Out-Null
+    robocopy $DistTemp $dest /E /IS /NJH /NJS /NFL /NDL | Out-Null
     OK $dest
 }
 
