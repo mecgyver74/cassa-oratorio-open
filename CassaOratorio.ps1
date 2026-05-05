@@ -3,7 +3,8 @@ $ErrorActionPreference = "Continue"
 $ProgressPreference    = "SilentlyContinue"
 $VerbosePreference     = "Continue"
 
-$Root     = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptPath = $MyInvocation.MyCommand.Path
+$Root     = Split-Path -Parent $ScriptPath
 $AppDir   = Join-Path $Root "app"
 $PbExe    = Join-Path $AppDir "pocketbase.exe"
 $PbData   = Join-Path $AppDir "pb_data"
@@ -25,6 +26,27 @@ function Log($msg, $col = "Cyan") {
 function LogOK($msg)   { Log "OK $msg" "Green" }
 function LogErr($msg)  { Log "ERRORE $msg" "Red" }
 function LogWarn($msg) { Log "AVVISO $msg" "Yellow" }
+
+function AggiornaCollegamentoDesktop {
+    $icoPath = Join-Path $AppDir "cassa.ico"
+    if (-not (Test-Path $icoPath)) { return }
+    try {
+        $desktop = [Environment]::GetFolderPath("Desktop")
+        $lnkPath = Join-Path $desktop "Cassa Dalila.lnk"
+        $wsh     = New-Object -ComObject WScript.Shell
+        $lnk     = $wsh.CreateShortcut($lnkPath)
+        $lnk.TargetPath       = "powershell.exe"
+        $lnk.Arguments        = "-ExecutionPolicy Bypass -File `"$ScriptPath`""
+        $lnk.WorkingDirectory = $Root
+        $lnk.IconLocation     = "$icoPath,0"
+        $lnk.Description      = "Cassa Dalila"
+        $lnk.WindowStyle      = 1
+        $lnk.Save()
+        LogOK "Collegamento desktop aggiornato con icona"
+    } catch {
+        LogWarn "Collegamento desktop non aggiornato: $_"
+    }
+}
 
 function WaitPB($sec) {
     for ($i = 0; $i -lt ($sec * 2); $i++) {
@@ -124,6 +146,9 @@ if ($Root -match "Google Drive|OneDrive|Dropbox|iCloud") {
 foreach ($d in @($AppDir, $PbData, $MigDir, $PbPublic, $FrontDir)) {
     New-Item -ItemType Directory -Force -Path $d | Out-Null
 }
+
+# ── Collegamento desktop con icona ───────────────────────────
+AggiornaCollegamentoDesktop
 
 # ── Copia migrazioni (solo se sorgente diversa da destinazione) ──
 $MigSrc = Join-Path $Root "app\pb_migrations"
