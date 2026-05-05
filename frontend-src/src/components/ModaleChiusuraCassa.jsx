@@ -44,6 +44,7 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
   const totNetto      = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
   const totContanti   = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.totale_netto || 0), 0)
   const totCarta      = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const totSatispay   = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.totale_netto || 0), 0)
   const totOmaggi     = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
   const primoNum      = validi.length ? Math.min(...validi.map(s => s.numero)) : 0
   const ultimoNum     = validi.length ? Math.max(...validi.map(s => s.numero)) : 0
@@ -72,9 +73,10 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
         chiusa_da:       utente?.id || '',
         scontrini_count: validi.length,
         totale_netto:    totNetto,
-        totale_contanti: totContanti,
-        totale_carta:    totCarta,
-        totale_omaggi:   totOmaggi,
+        totale_contanti:  totContanti,
+        totale_carta:     totCarta,
+        totale_satispay:  totSatispay,
+        totale_omaggi:    totOmaggi,
         primo_numero:    primoNum,
         ultimo_numero:   ultimoNum,
       })
@@ -141,6 +143,7 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
               <StatCard label="Incasso netto"      val={EUR(totNetto)}       big green />
               <StatCard label="Contanti"           val={EUR(totContanti)} />
               <StatCard label="Carta"              val={EUR(totCarta)} />
+              {totSatispay > 0 && <StatCard label="Satispay"    val={EUR(totSatispay)} />}
               {totOmaggi > 0 && <StatCard label="Omaggi (lordo)" val={EUR(totOmaggi)} />}
               {stornati.length > 0 && <StatCard label="Stornati" val={stornati.length} warn />}
             </div>

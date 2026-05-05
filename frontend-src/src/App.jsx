@@ -6,15 +6,17 @@ import Magazzino from './pages/Magazzino'
 import Setup from './pages/Setup'
 import ComandeDisplay from './pages/ComandeDisplay'
 import EditorStampe from './pages/EditorStampe'
+import Dashboard from './pages/Dashboard'
 import { ToastProvider } from './components/Toast'
 import { migraLocalStorage } from './lib/config'
 import { loadStampaConfig } from './lib/stampa'
 import { fsConfirm } from './lib/fullscreen'
 import './index.css'
 
-const PAGES = ['cassa', 'statistiche', 'magazzino', 'setup', 'stampe', 'comande']
+const PAGES = ['cassa', 'dashboard', 'statistiche', 'magazzino', 'setup', 'stampe', 'comande']
 const PAGE_LABELS = {
   cassa: 'Cassa',
+  dashboard: 'Dashboard',
   statistiche: 'Statistiche',
   magazzino: 'Magazzino',
   setup: 'Setup',
@@ -186,6 +188,7 @@ export default function App() {
     ? PAGES
     : PAGES.filter(p => ['cassa', 'comande'].includes(p))
 
+
   return (
     <ToastProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -232,6 +235,7 @@ export default function App() {
 
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
           {page === 'cassa'        && <Cassa utente={utente} />}
+          {page === 'dashboard'    && <div style={{ flex:1, overflowY:'auto' }}><Dashboard utente={utente} /></div>}
           {page === 'statistiche'  && <div style={{ flex:1, overflowY:'auto' }}><Statistiche utente={utente} /></div>}
           {page === 'magazzino'    && <div style={{ flex:1, overflowY:'auto' }}><Magazzino /></div>}
           {page === 'setup'        && <div style={{ flex:1, overflowY:'auto' }}><Setup /></div>}

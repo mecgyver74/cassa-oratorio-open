@@ -21,14 +21,14 @@ export default function ModalePagamento({ totale, onConferma, onAnnulla }) {
   const sommaTagli = tagli.reduce((s, v) => s + v, 0)
   const haTagli = tagli.length > 0
 
-  const ric = tipo === 'carta' ? totale
+  const ric = tipo === 'carta' || tipo === 'satispay' ? totale
     : tipo === 'omaggio' ? 0
     : haTagli ? sommaTagli
     : (parseFloat(npStr) || 0)
 
   const resto = ric - totale
   const pagatoEsatto = !haTagli && npStr === '' && tipo === 'contanti'
-  const canConferma = tipo === 'carta' || tipo === 'omaggio' || pagatoEsatto || ric >= totale
+  const canConferma = tipo === 'carta' || tipo === 'satispay' || tipo === 'omaggio' || pagatoEsatto || ric >= totale
 
   const np = v => {
     if (tipo !== 'contanti') return
@@ -49,7 +49,7 @@ export default function ModalePagamento({ totale, onConferma, onAnnulla }) {
     setNpStr('')
   }
 
-  const importoDisplay = tipo === 'carta'
+  const importoDisplay = tipo === 'carta' || tipo === 'satispay'
     ? totale.toFixed(2).replace('.', ',')
     : tipo === 'omaggio' ? '0,00'
     : haTagli ? sommaTagli.toFixed(2).replace('.', ',')
@@ -74,7 +74,7 @@ export default function ModalePagamento({ totale, onConferma, onAnnulla }) {
         <div className="modal-tot">{EUR(totale)}</div>
 
         <div className="pag-tipos">
-          {[['contanti','💵 Contanti'],['carta','💳 Carta'],['omaggio','🎁 Omaggio']].map(([k,l]) => (
+          {[['contanti','💵 Contanti'],['carta','💳 Carta'],['satispay','📱 Satispay'],['omaggio','🎁 Omaggio']].map(([k,l]) => (
             <button key={k} className={`pag-tipo-btn ${tipo===k?'active':''}`}
               onClick={() => { setTipo(k); setNpStr(''); setTagli([]) }}>{l}</button>
           ))}

@@ -346,8 +346,19 @@ Log "Lock scritto: $localIP"
 
 # ── FASE 6: Apri browser con IP di rete ─────────────────────
 $browserUrl = "http://${localIP}:$PB_PORT"
-Start-Process $browserUrl
-LogOK "Browser aperto: $browserUrl"
+$chromePaths = @(
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+)
+$chrome = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($chrome) {
+    Start-Process -FilePath $chrome -ArgumentList "--start-fullscreen", $browserUrl
+    LogOK "Browser aperto in fullscreen: $browserUrl"
+} else {
+    Start-Process $browserUrl
+    LogOK "Browser aperto: $browserUrl"
+}
 
 Write-Host ""
 Write-Host "  +=============================================+" -ForegroundColor Green
@@ -360,37 +371,41 @@ Write-Host ""
 Write-Host "  Premi CTRL+C per spegnere la cassa" -ForegroundColor DarkYellow
 Write-Host "  Oppure usa il pulsante Spegni nell'interfaccia" -ForegroundColor DarkYellow
 
-# Avvia listener HTTP per shutdown remoto sulla porta 8091
-$shutdownPort = 8091
-$listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://localhost:$shutdownPort/shutdown/")
-try { 
-    $listener.Start() 
-    Log "Listener avviato su localhost:$shutdownPort"
-} catch { 
-    $listener = $null 
-    Log "Errore avvio listener: $_"
+# Avvia listener TCP per shutdown remoto (prova più porte perché Windows può escluderne alcune)
+$shutdownPort = $null
+$listener = $null
+foreach ($port in @(8093, 8094, 8095, 8096, 8097)) {
+    try {
+        $tcpListener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $port)
+        $tcpListener.Start()
+        $listener = $tcpListener
+        $shutdownPort = $port
+        Log "Listener avviato su localhost:$shutdownPort"
+        break
+    } catch { }
 }
-$lastRequest = [DateTime]::Now
+if (-not $listener) {
+    LogWarn "Listener shutdown non disponibile (porte bloccate da Windows)"
+}
 try {
     while ($true) {
         # Controlla se arriva richiesta di shutdown
-        if ($listener -and $listener.IsListening) {
-            $ctx = $null
+        if ($listener -and $listener.Server.IsBound) {
             try {
-                $async = $listener.BeginGetContext($null, $null)
-                if ($async.AsyncWaitHandle.WaitOne(100)) {
-                    $ctx = $listener.EndGetContext($async)
-                    Log "Richiesta ricevuta: $($ctx.Request.HttpMethod) $($ctx.Request.Url)"
-                    $resp = $ctx.Response
-                    $body = [System.Text.Encoding]::UTF8.GetBytes("OK")
-                    $resp.ContentLength64 = $body.Length
-                    $resp.OutputStream.Write($body, 0, $body.Length)
-                    $resp.Close()
+                if ($listener.Pending()) {
+                    $client = $listener.AcceptTcpClient()
+                    $stream = $client.GetStream()
+                    $buf = New-Object byte[] 4096
+                    if ($stream.DataAvailable) { $stream.Read($buf, 0, $buf.Length) | Out-Null }
+                    $respBytes = [System.Text.Encoding]::UTF8.GetBytes("HTTP/1.1 200 OK`r`nContent-Length: 2`r`nAccess-Control-Allow-Origin: *`r`n`r`nOK")
+                    $stream.Write($respBytes, 0, $respBytes.Length)
+                    $client.Close()
                     Log "Shutdown richiesto dall'interfaccia"
                     break
+                } else {
+                    Start-Sleep -Milliseconds 100
                 }
-            } catch { 
+            } catch {
                 Log "Errore listener: $_"
             }
         } else {
@@ -405,21 +420,57 @@ try {
         }
     }
 } finally {
-    Log "Chiusura..."
-    EliminaLock
-    if ($listener) { try { $listener.Stop() } catch { } }
-    # Chiudi PocketBase e la finestra cmd che lo contiene
+    Log "Chiusura in corso..."
+    if ($listener) { try { $listener.Stop() } catch { }; $listener = $null }
+
+    # Ferma PocketBase
     if ($pbProc) {
         Stop-Process -Id $pbProc.Id -Force -EA SilentlyContinue
     }
     Get-Process -Name "pocketbase" -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
-    if ($pbProc) {
-        $pbProc.CloseMainWindow() | Out-Null
-        Start-Sleep -Milliseconds 500
+    Start-Sleep -Seconds 2
+
+    # WAL checkpoint: unisce data.db-wal in data.db prima che Drive sincronizzi
+    # Usa winsqlite3.dll integrata in Windows 10+ (zero download)
+    # ROLLBACK: rimuovere il blocco try/catch sottostante
+    try {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class WalCheckpoint {
+    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int sqlite3_open(string filename, out IntPtr db);
+    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int sqlite3_exec(IntPtr db, string sql, IntPtr cb, IntPtr arg, out IntPtr errmsg);
+    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int sqlite3_close(IntPtr db);
+    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void sqlite3_free(IntPtr ptr);
+}
+'@ -EA Stop
+
+        foreach ($dbFile in @("data.db", "auxiliary.db")) {
+            $dbPath = Join-Path $PbData $dbFile
+            $walPath = "$dbPath-wal"
+            if ((Test-Path $dbPath) -and (Test-Path $walPath) -and (Get-Item $walPath).Length -gt 0) {
+                $db = [IntPtr]::Zero
+                $rc = [WalCheckpoint]::sqlite3_open($dbPath, [ref]$db)
+                if ($rc -eq 0) {
+                    $errmsg = [IntPtr]::Zero
+                    [WalCheckpoint]::sqlite3_exec($db, "PRAGMA wal_checkpoint(TRUNCATE);", [IntPtr]::Zero, [IntPtr]::Zero, [ref]$errmsg) | Out-Null
+                    if ($errmsg -ne [IntPtr]::Zero) { [WalCheckpoint]::sqlite3_free($errmsg) }
+                    [WalCheckpoint]::sqlite3_close($db) | Out-Null
+                    LogOK "WAL checkpoint: $dbFile pronto per sincronizzazione"
+                }
+            }
+        }
+    } catch {
+        LogWarn "WAL checkpoint non disponibile ($($_.Exception.Message)) - Drive sincronizzera' anche il file .wal"
     }
+
+    EliminaLock
     LogOK "Cassa spenta"
     Start-Sleep -Seconds 1
-    # Chiudi anche questa finestra
     Stop-Process -Id $PID -Force -EA SilentlyContinue
 }
 

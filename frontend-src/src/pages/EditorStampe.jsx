@@ -43,9 +43,20 @@ function Preview({ cfg, tipo }) {
   const fontSize = tipo === 'comanda' ? (cfg.fontSizeComanda || 14) : (cfg.fontSize || 11)
   const larghezza = cfg.larghezza || 80
 
+  // Helper per ricavare lo stile di un campo dal cfg
+  const fs = (k, defSize) => ({
+    fontSize:   cfg[k+'Sz']  ?? defSize,
+    fontWeight: cfg[k+'B']   ? 'bold'   : 'normal',
+    fontStyle:  cfg[k+'I']   ? 'italic' : 'normal',
+  })
+
   if (tipo === 'scontrino') {
     const footer = cfg.footerScontrino || 'Grazie e arrivederci!'
     const layout = cfg.colonneLayout || 'standard'
+    const sData   = fs('sData',   fontSize)
+    const sIntst  = fs('sIntst',  fontSize)
+    const sNote   = fs('sNote',   fontSize - 1)
+    const sProd   = fs('sProd',   fontSize)
     return (
       <div style={{ fontFamily, fontSize, width: larghezza + 'mm', maxWidth: '100%',
         background: '#fff', color: '#000', padding: 8, border: '1px solid #ddd',
@@ -58,12 +69,12 @@ function Preview({ cfg, tipo }) {
         <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: fontSize + 4 }}>{nome}</div>
         {ind && <div style={{ textAlign: 'center' }}>{ind}</div>}
         <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '3px 0' }} />
-        {cfg.mostraData !== false && <div>Data: {new Date().toLocaleString('it-IT')}</div>}
-        <div>Scontrino n. 0042</div>
-        <div>Tavolo/Nome: 5</div>
-        <div style={{ fontStyle: 'italic', fontSize: fontSize - 1 }}>Note: Nessuna cipolla</div>
+        {cfg.mostraData !== false && <div style={sData}>Data: {new Date().toLocaleString('it-IT')}</div>}
+        <div style={sIntst}>Scontrino n. 0042</div>
+        <div style={sIntst}>Tavolo/Nome: 5</div>
+        <div style={sNote}>Note: Nessuna cipolla</div>
         <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '3px 0' }} />
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', ...sProd }}>
           {layout !== 'compatto' && (
             <thead><tr>
               <th style={{ textAlign: 'left' }}>Prodotto</th>
@@ -95,6 +106,9 @@ function Preview({ cfg, tipo }) {
 
   // Comanda
   const fontSizeComanda = cfg.fontSizeComanda || 14
+  const cIntst = fs('cIntst', fontSizeComanda)
+  const cNote  = fs('cNote',  fontSizeComanda - 2)
+  const cProd  = fs('cProd',  fontSizeComanda)
   return (
     <div style={{ fontFamily, fontSize: fontSizeComanda, width: larghezza + 'mm', maxWidth: '100%',
       background: '#fff', color: '#000', padding: 8, border: '1px solid #ddd',
@@ -104,25 +118,25 @@ function Preview({ cfg, tipo }) {
         border: '3px solid #000', padding: '3px', margin: '3px 0', textTransform: 'uppercase' }}>
         GRIGLIA
       </div>
-      {cfg.mostraNumero !== false && <div style={{ fontWeight: 'bold' }}>Scontrino #0042</div>}
-      {cfg.mostraOrario !== false && <div>{new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>}
+      {cfg.mostraNumero !== false && <div style={cIntst}>Scontrino #0042</div>}
+      {cfg.mostraOrario !== false && <div style={cIntst}>{new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>}
       {cfg.mostraTavolo !== false && (
-        <div style={{ fontSize: fontSizeComanda + 4, fontWeight: 900, borderBottom: '2px solid #000' }}>
+        <div style={{ ...cIntst, fontSize: (cIntst.fontSize ?? fontSizeComanda) + 4, fontWeight: 900, borderBottom: '2px solid #000' }}>
           TAVOLO/NOME 5
         </div>
       )}
-      <div style={{ fontStyle: 'italic', fontSize: fontSizeComanda - 2 }}>Note: Nessuna cipolla</div>
+      <div style={cNote}>Note: Nessuna cipolla</div>
       <hr style={{ border: 'none', borderTop: '2px solid #000', margin: '3px 0' }} />
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <tbody>
           {DEMO_RIGHE_COMANDA.map((r,i) => (
             <tr key={i}>
-              <td style={{ fontSize: cfg.evidenziaQta !== false ? fontSizeComanda+6 : fontSizeComanda, fontWeight: 'bold', verticalAlign: 'top', paddingRight: 8, whiteSpace: 'nowrap' }}>
+              <td style={{ fontSize: cfg.evidenziaQta !== false ? (cProd.fontSize ?? fontSizeComanda)+6 : (cProd.fontSize ?? fontSizeComanda), fontWeight: 'bold', verticalAlign: 'top', paddingRight: 8, whiteSpace: 'nowrap' }}>
                 {r.quantita}x
               </td>
-              <td style={{ fontSize: fontSizeComanda, fontWeight: 'bold', padding: '2px 0' }}>
+              <td style={{ ...cProd, padding: '2px 0' }}>
                 {r.nome_snapshot}
-                {r.note && <div style={{ fontSize: fontSizeComanda-2, fontWeight: 'normal' }}>{r.note}</div>}
+                {r.note && <div style={{ ...cNote, fontWeight: 'normal' }}>{r.note}</div>}
               </td>
             </tr>
           ))}
@@ -172,6 +186,34 @@ export default function EditorStampe() {
       {help && <span style={{ fontSize: 11, color: 'var(--text3)' }}>{help}</span>}
     </div>
   )
+
+  const StyleRow = ({ label, kSz, kB, kI, defSize }) => {
+    const sz  = cfg[kSz] ?? defSize
+    const bold = cfg[kB] ?? false
+    const ital = cfg[kI] ?? false
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>{label}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="range" min={7} max={20} value={sz}
+            onChange={e => set(kSz, parseInt(e.target.value))}
+            style={{ flex: 1, minWidth: 60 }} />
+          <span style={{ minWidth: 28, textAlign: 'center', fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 15,
+            background: 'var(--surf2)', border: '1px solid var(--border)', borderRadius: 5, padding: '1px 4px' }}>{sz}</span>
+          <button onClick={() => set(kB, !bold)} style={{
+            padding: '2px 8px', fontWeight: 800, fontSize: 13,
+            background: bold ? 'var(--accent)' : 'var(--surf2)',
+            color: bold ? '#fff' : 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer' }}>B</button>
+          <button onClick={() => set(kI, !ital)} style={{
+            padding: '2px 8px', fontStyle: 'italic', fontSize: 13,
+            background: ital ? 'var(--accent)' : 'var(--surf2)',
+            color: ital ? '#fff' : 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer' }}>I</button>
+        </div>
+      </div>
+    )
+  }
 
   const NumInput = ({ label, k, min, max, step, help }) => (
     <Sl label={label} help={help}>
@@ -239,6 +281,12 @@ export default function EditorStampe() {
                   placeholder="es. Grazie e arrivederci!"
                   style={{ width:'100%', background:'var(--surf2)', border:'1px solid var(--border)', borderRadius:'var(--rs)', padding:'8px 10px', color:'var(--text)', fontSize:14 }} />
               </Sl>
+              <div style={{ marginTop: 4, marginBottom: 6, fontSize: 12, fontWeight: 700, color: 'var(--text2)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>Stile per campo</div>
+              <StyleRow label="Data / ora"              kSz="sDataSz"  kB="sDataB"  kI="sDataI"  defSize={cfg.fontSize ?? 11} />
+              <StyleRow label="N. scontrino · Tavolo"   kSz="sIntstSz" kB="sIntstB" kI="sIntstI" defSize={cfg.fontSize ?? 11} />
+              <StyleRow label="Note"                    kSz="sNoteSz"  kB="sNoteB"  kI="sNoteI"  defSize={(cfg.fontSize ?? 11) - 1} />
+              <StyleRow label="Elenco prodotti"         kSz="sProdSz"  kB="sProdB"  kI="sProdI"  defSize={cfg.fontSize ?? 11} />
+              <div style={{ marginBottom: 10 }} />
               <CB label="Stampa scontrino automaticamente" k="stampaScontrino" />
               <CB label="Mostra data e ora" k="mostraData" />
               <CB label="Mostra nome cassa" k="mostraCassa" />
@@ -269,6 +317,10 @@ export default function EditorStampe() {
               </Sl>
               <NumInput label="Dimensione font prodotti (px)" k="fontSizeComanda" min={10} max={24} />
               <CB label="Evidenzia quantità (font grande)" k="evidenziaQta" />
+              <div style={{ marginTop: 4, marginBottom: 6, fontSize: 12, fontWeight: 700, color: 'var(--text2)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>Stile per campo</div>
+              <StyleRow label="N. scontrino · Tavolo" kSz="cIntstSz" kB="cIntstB" kI="cIntstI" defSize={cfg.fontSizeComanda ?? 14} />
+              <StyleRow label="Note"                  kSz="cNoteSz"  kB="cNoteB"  kI="cNoteI"  defSize={(cfg.fontSizeComanda ?? 14) - 2} />
+              <StyleRow label="Prodotti"              kSz="cProdSz"  kB="cProdB"  kI="cProdI"  defSize={cfg.fontSizeComanda ?? 14} />
               <CB label="Mostra numero scontrino" k="mostraNumero" />
               <CB label="Mostra orario" k="mostraOrario" />
               <CB label="Mostra tavolo/nome" k="mostraTavolo" />

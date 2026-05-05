@@ -130,6 +130,7 @@ export function useCassa() {
         operatore: utente?.id || null,
         postazione: utente?.nome || utente?.postazione || 'Cassa',
         tavolo: tavolo?.id || null,
+        sessione: '',       // esplicito: garantisce sessione="" per il filtro sessione corrente
         note,
         totale_lordo: Math.max(0, sub || 0),
         sconto_perc: scontoPerc || 0,
@@ -159,25 +160,37 @@ export function useCassa() {
         })
       ))
 
-      // Scala magazzino (sequenziale per evitare race condition su stesso prodotto)
-      for (const r of righe.filter(r => r.prodotto)) {
-        try {
-          const prod = await pb.collection('prodotti').getOne(r.prodotto, { expand: 'magazzino_comune' })
-          if (prod.magazzino_comune && prod.expand?.magazzino_comune) {
-            const mc = prod.expand.magazzino_comune
-            if (mc.quantita >= 0) { // -1 = infinito, non scalare
-              const mcFresh = await pb.collection('magazzini_comuni').getOne(mc.id)
-              await pb.collection('magazzini_comuni').update(mc.id, { quantita: Math.max(0, mcFresh.quantita - r.quantita) })
-              await pb.collection('movimenti_magazzino').create({ magazzino_comune: mc.id, tipo: 'scarico', quantita: r.quantita, note: `Scontrino #${nextNum}`, scontrino: sc.id })
-            }
-          } else {
-            if (prod.quantita >= 0) { // -1 = infinito, non scalare
-              const prodFresh = await pb.collection('prodotti').getOne(r.prodotto)
-              await pb.collection('prodotti').update(r.prodotto, { quantita: Math.max(0, prodFresh.quantita - r.quantita) })
-              await pb.collection('movimenti_magazzino').create({ prodotto: r.prodotto, tipo: 'scarico', quantita: r.quantita, note: `Scontrino #${nextNum}`, scontrino: sc.id })
-            }
+      // Scala magazzino via hook server-side (atomico, previene overselling con più casse)
+      const righeConProdotto = righe.filter(r => r.prodotto)
+      if (righeConProdotto.length > 0) {
+        // Costruisce la lista items con le info di magazzino_comune (se presente)
+        const prodsInfo = await Promise.all(
+          righeConProdotto.map(r => pb.collection('prodotti').getOne(r.prodotto, { expand: 'magazzino_comune' }))
+        )
+        const items = righeConProdotto.map((r, i) => {
+          const prod = prodsInfo[i]
+          const mc = prod.magazzino_comune && prod.expand?.magazzino_comune ? prod.expand.magazzino_comune : null
+          return {
+            prodotto_id:         mc ? null : r.prodotto,
+            magazzino_comune_id: mc ? mc.id : null,
+            quantita:            r.quantita,
           }
-        } catch(e) { console.warn('Errore scarico:', e) }
+        }).filter(item => item.prodotto_id || item.magazzino_comune_id)
+
+        const res = await fetch(`${pb.baseUrl}/api/scarico-magazzino`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scontrino_id: sc.id, numero: nextNum, items }),
+        })
+
+        if (res.status === 409) {
+          // Stock insufficiente: cancella lo scontrino appena creato e blocca la vendita
+          const err = await res.json().catch(() => ({}))
+          await pb.collection('scontrini').delete(sc.id).catch(() => {})
+          throw new Error(err.message || 'Stock insufficiente')
+        } else if (!res.ok) {
+          console.warn('Errore scarico magazzino (non bloccante):', res.status)
+        }
       }
 
       // Stampa unificata: scontrino + tutte le comande in una sola finestra

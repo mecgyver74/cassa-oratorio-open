@@ -238,7 +238,7 @@ input, select, textarea { font-family: inherit; }
 }
 .modal {
   background: var(--surf); border: 1px solid var(--border);
-  border-radius: 14px; padding: 22px; width: 360px;
+  border-radius: 14px; padding: 22px; width: 420px;
   box-shadow: 0 20px 60px rgba(0,0,0,.6);
 }
 .modal h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 14px; }

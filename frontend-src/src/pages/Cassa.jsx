@@ -16,7 +16,10 @@ export default function Cassa({ utente }) {
   const [famiglie, setFamiglie] = useState([])
   const [prodotti, setProdotti] = useState([])
   const [menu, setMenu] = useState([])
-  const [famSel, setFamSel] = useState(0)
+  const famSelKey = `cassa_fam_sel_${utente?.id}`
+  const [famSel, setFamSel] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(famSelKey)) || [] } catch { return [] }
+  })
   const [tabSel, setTabSel] = useState('prodotti')
   const [pagOpen, setPagOpen] = useState(false)
   const [storicoOpen, setStoricoOpen] = useState(false)
@@ -37,18 +40,23 @@ export default function Cassa({ utente }) {
     }
   }, [cassa.righe, pendingSplitProd])
 
+  useEffect(() => { localStorage.setItem(famSelKey, JSON.stringify(famSel)) }, [famSel, famSelKey])
+
   // Impostazioni aspetto pulsanti (da Setup → Aspetto) — caricati dal DB
   const [dispCfg, setDispCfg] = useState({})
   useEffect(() => { getConf('cassa_display', {}).then(setDispCfg) }, [])
-  const nomeFontSize   = dispCfg.nomeFontSize   ?? 14
-  const prezzoFontSize = dispCfg.prezzoFontSize ?? 12
-  const btnHeight      = dispCfg.btnHeight      ?? 90
-  const btnWidth       = dispCfg.btnWidth       ?? 130
-  const colNome        = dispCfg.colNome        ?? '#ffffff'
-  const gapX           = dispCfg.gapX           ?? 6
-  const gapY           = dispCfg.gapY           ?? 6
-  const colPrezzo      = dispCfg.colPrezzo      ?? '#ffffff'
-  const colGiacenza    = dispCfg.colGiacenza    ?? '#ffffffaa'
+  const nomeFontSize      = dispCfg.nomeFontSize   ?? 14
+  const prezzoFontSize    = dispCfg.prezzoFontSize ?? 12
+  const btnHeight         = dispCfg.btnHeight      ?? 90
+  const btnWidth          = dispCfg.btnWidth       ?? 130
+  const colNome           = dispCfg.colNome        ?? '#ffffff'
+  const gapX              = dispCfg.gapX           ?? 6
+  const gapY              = dispCfg.gapY           ?? 6
+  const colPrezzo         = dispCfg.colPrezzo        ?? '#ffffff'
+  const colGiacenza       = dispCfg.colGiacenza      ?? '#ffffffaa'
+  const giacenzaFontSize  = dispCfg.giacenzaFontSize ?? 10
+  const lineGap           = dispCfg.lineGap          ?? 4
+  const refreshIntervalSec = dispCfg.refreshInterval ?? 30
 
   // Divisore trascinabile
   const [scontrWidth, setScontrWidth] = useState(340)
@@ -108,14 +116,56 @@ export default function Cassa({ utente }) {
     return () => { cancelled = true }
   }, [])
 
+  // Ref sempre aggiornato alle righe correnti — usato dentro ricaricaProdotti senza dipendenze
+  const righeRef = useRef(cassa.righe)
+  useEffect(() => { righeRef.current = cassa.righe }, [cassa.righe])
+
+  const [giacenzaWarning, setGiacenzaWarning] = useState([])
+
   const ricaricaProdotti = useCallback(async () => {
     try {
       const prod = await pb.collection('prodotti').getFullList({ sort: 'ordine,nome', filter: 'attivo=true', expand: 'magazzino_comune,famiglia' })
       setProdotti(prod)
+
+      // Controlla se qualche prodotto nel carrello ha ora giacenza insufficiente
+      const righe = righeRef.current
+      if (righe.length === 0) return
+      const problemi = []
+      const visti = new Set()
+      for (const riga of righe) {
+        if (!riga._prodotto_id || visti.has(riga._prodotto_id)) continue
+        visti.add(riga._prodotto_id)
+        const p = prod.find(x => x.id === riga._prodotto_id)
+        if (!p) continue
+        const qtaDisp = p.expand?.magazzino_comune
+          ? p.expand.magazzino_comune.quantita
+          : p.quantita
+        if (qtaDisp < 0) continue // scorta infinita
+        const qtaCarrello = righe
+          .filter(r => r._prodotto_id === riga._prodotto_id)
+          .reduce((s, r) => s + r.quantita, 0)
+        if (qtaCarrello > qtaDisp) {
+          problemi.push({ nome: riga.nome_snapshot, qtaCarrello, qtaDisp })
+        }
+      }
+      if (problemi.length > 0) setGiacenzaWarning(problemi)
     } catch(e) {
       if (e?.isAbort || e?.message?.includes('autocancelled')) return
     }
   }, [])
+
+  // Ref per tenere traccia dell'ultimo refresh manuale ed evitare doppi aggiornamenti ravvicinati
+  const lastManualRefreshRef = useRef(0)
+
+  useEffect(() => {
+    if (refreshIntervalSec <= 0) return
+    const ms = refreshIntervalSec * 1000
+    const id = setInterval(() => {
+      if (Date.now() - lastManualRefreshRef.current < ms / 2) return
+      ricaricaProdotti()
+    }, ms)
+    return () => clearInterval(id)
+  }, [refreshIntervalSec, ricaricaProdotti])
 
   const getScortaDisplay = (p) => {
     if (p.expand?.magazzino_comune) {
@@ -133,6 +183,12 @@ export default function Cassa({ utente }) {
     if (v > 0) toast('Sconto applicato', 'b')
   }
 
+  const svuotaCompleto = useCallback(() => {
+    cassa.svuota()
+    setScontoV('')
+    setScontoT('€')
+  }, [cassa])
+
   const handlePaga = async (params) => {
     const res = await cassa.pagaeSalva({ ...params, utente, asporto })
     if (res.ok) {
@@ -141,6 +197,8 @@ export default function Cassa({ utente }) {
       setPagOpen(false)
       setAsporto(false)
       setScontoV('')
+      setScontoT('€')
+      lastManualRefreshRef.current = Date.now()
       ricaricaProdotti()
     } else {
       toast('Errore: ' + res.error, 'r')
@@ -149,10 +207,10 @@ export default function Cassa({ utente }) {
 
   const handleStorno = async () => {
     const note = fsPrompt('Note storno (opzionale):') ?? ''
-    const ultimi = await pb.collection('scontrini').getList(1, 1, { sort: '-numero', filter: 'stornato=false' }).catch(() => ({ items: [] }))
+    const ultimi = await pb.collection('scontrini').getList(1, 1, { sort: '-numero', filter: 'stornato=false && sessione=""' }).catch(() => ({ items: [] }))
     if (!ultimi.items.length) { toast('Nessuno scontrino da stornare', 'r'); return }
     const res = await cassa.stornoScontrino(ultimi.items[0].id, note)
-    if (res.ok) { toast('Scontrino stornato', 'r'); ricaricaProdotti() }
+    if (res.ok) { toast('Scontrino stornato', 'r'); lastManualRefreshRef.current = Date.now(); ricaricaProdotti() }
     else toast('Errore: ' + res.error, 'r')
   }
 
@@ -174,34 +232,37 @@ export default function Cassa({ utente }) {
     })
   }, [cassa.righe, famiglie])
 
-  // Prodotti raggruppati per famiglia (quando "Tutti")
+  // Prodotti raggruppati per famiglia
   const renderProdotti = () => {
-    if (famSel !== 0) {
-      // Mostra solo se la famiglia selezionata è attiva
-      const famAttiva = famiglie.find(f => f.id === famSel)
-      if (!famAttiva) return null
-      const filtered = prodotti.filter(p => p.famiglia === famSel && !p.solo_menu)
-      return renderGriglia(filtered)
-    }
-    // Raggruppa per famiglia nell'ordine delle famiglie (solo famiglie attive)
-    const famIds = new Set(famiglie.map(f => f.id))
-    const famConProdotti = famiglie.map(f => ({
+    // Calcola l'elenco famiglie da mostrare
+    const famDaMostrare = famSel.length > 0
+      ? famiglie.filter(f => famSel.includes(f.id))
+      : famiglie
+
+    const famConProdotti = famDaMostrare.map(f => ({
       fam: f,
       prods: prodotti.filter(p => p.famiglia === f.id && !p.solo_menu)
     })).filter(g => g.prods.length > 0)
-    // Prodotti senza famiglia (nascosti se la famiglia è disattivata)
-    const senzaFam = prodotti.filter(p => !p.famiglia && !p.solo_menu)
+
+    const senzaFam = famSel.length === 0
+      ? prodotti.filter(p => !p.famiglia && !p.solo_menu)
+      : []
+
+    // Con una sola famiglia selezionata non mostrare l'header di gruppo
+    const mostraHeader = famSel.length !== 1
 
     return (
       <>
         {famConProdotti.map(({ fam, prods }) => (
           <div key={fam.id}>
-            <div style={{
-              padding: '4px 8px', fontSize: 11, fontWeight: 800,
-              color: '#fff', background: fam.colore || 'var(--text3)',
-              borderRadius: 4, margin: '6px 0 4px',
-              display: 'inline-block', letterSpacing: '.5px', textTransform: 'uppercase'
-            }}>{fam.nome}</div>
+            {mostraHeader && (
+              <div style={{
+                padding: '4px 8px', fontSize: 11, fontWeight: 800,
+                color: colNome, background: fam.colore || 'var(--text3)',
+                borderRadius: 4, margin: '6px 0 4px',
+                display: 'inline-block', letterSpacing: '.5px', textTransform: 'uppercase'
+              }}>{fam.nome}</div>
+            )}
             <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: gapX, rowGap: gapY, alignContent: 'start' }}>
               {renderBotoni(prods)}
             </div>
@@ -231,11 +292,12 @@ export default function Cassa({ utente }) {
       <button key={p.id} className={`prod-btn ${esaurito ? 'esaurito' : ''}`}
         style={{ background: bgColor, boxShadow: `0 3px 10px ${bgColor}44`,
           height: btnHeight, minHeight: btnHeight,
-          width: btnWidth, minWidth: btnWidth }}
+          width: btnWidth, minWidth: btnWidth,
+          display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: lineGap }}
         onClick={() => { if (!esaurito) { cassa.addProdotto(p, msg => toast(msg, 'r')) } }}>
         <div className="pn" style={{ fontSize: nomeFontSize, color: colNome }}>{p.nome}</div>
         <div className="pp" style={{ fontSize: prezzoFontSize, color: colPrezzo }}>{EUR(p.prezzo)}</div>
-        <div className={`ps ${sc.low ? 'low' : ''}`} style={{ color: colGiacenza }}>
+        <div className={`ps ${sc.low ? 'low' : ''}`} style={{ color: colGiacenza, fontSize: giacenzaFontSize }}>
           {sc.inf ? '∞' : esaurito ? 'ESAURITO' : `Scorta: ${sc.qty}${sc.label ? ' ('+sc.label+')' : ''}`}
         </div>
       </button>
@@ -245,20 +307,71 @@ export default function Cassa({ utente }) {
   return (
     <div style={{ display:'flex', flexDirection: window.innerWidth < 700 ? 'column' : 'row', height:'calc(100vh - 50px)', overflow:'hidden' }}>
 
+      {/* POPUP GIACENZA INSUFFICIENTE */}
+      {giacenzaWarning.length > 0 && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,.55)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'var(--surf)', borderRadius: 16, padding: '28px 32px',
+            maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.4)',
+            border: '2px solid var(--red)',
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--red)', marginBottom: 8 }}>
+              ⚠️ Scorta insufficiente
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>
+              Un'altra cassa ha venduto dei prodotti presenti in questo scontrino:
+            </div>
+            {giacenzaWarning.map((w, i) => (
+              <div key={i} style={{
+                background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 8, padding: '10px 14px', marginBottom: 8,
+                fontSize: 14,
+              }}>
+                <strong>{w.nome}</strong>
+                <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 2 }}>
+                  Nel carrello: {w.qtaCarrello} pz — Disponibili ora: {w.qtaDisp} pz
+                </div>
+              </div>
+            ))}
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 20 }}>
+              Riduci la quantità prima di procedere al pagamento.
+            </div>
+            <button
+              onClick={() => setGiacenzaWarning([])}
+              style={{
+                width: '100%', padding: '12px 0', borderRadius: 10, border: 'none',
+                background: 'var(--red)', color: '#fff', fontWeight: 700,
+                fontSize: 15, cursor: 'pointer',
+              }}>
+              Capito
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* SINISTRA - Prodotti */}
       <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
         {/* Famiglie */}
         <div className="famiglie-bar">
-          <button className={`fam-btn ${famSel === 0 ? 'active' : ''}`}
-            onClick={() => setFamSel(0)}>Tutti</button>
-          {famiglie.map(f => (
-            <button key={f.id} className={`fam-btn ${famSel === f.id ? 'active' : ''}`}
-              style={famSel === f.id
-                ? { background: f.colore || 'var(--accent)', borderColor: f.colore || 'var(--accent)', color: '#fff' }
-                : { borderColor: f.colore || 'var(--accent)', color: f.colore || 'var(--accent)' }}
-              onClick={() => setFamSel(f.id)}>{f.nome}</button>
-          ))}
+          <button className={`fam-btn ${famSel.length === 0 ? 'active' : ''}`}
+            onClick={() => setFamSel([])}>Tutti</button>
+          {famiglie.map(f => {
+            const attiva = famSel.includes(f.id)
+            return (
+              <button key={f.id} className={`fam-btn ${attiva ? 'active' : ''}`}
+                style={attiva
+                  ? { background: f.colore || 'var(--accent)', borderColor: f.colore || 'var(--accent)', color: colNome }
+                  : { borderColor: f.colore || 'var(--accent)', color: colNome }}
+                onClick={() => setFamSel(prev =>
+                  prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]
+                )}>{f.nome}</button>
+            )
+          })}
         </div>
 
         {/* Tab prodotti/menu */}
@@ -441,7 +554,7 @@ export default function Cassa({ utente }) {
           </div>
 
           <div className="azioni-grid">
-            <button className="btn-az btn-svuota" onClick={cassa.svuota}>🗑 Svuota</button>
+            <button className="btn-az btn-svuota" onClick={svuotaCompleto}>🗑 Svuota</button>
             <button className="btn-az btn-storno" onClick={() => setStoricoOpen(true)}>📋 Storico</button>
             <button className="btn-az btn-paga"
               disabled={cassa.righe.length === 0 || cassa.loading}

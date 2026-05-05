@@ -21,7 +21,8 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
     setLoading(true)
     try {
       const r = await pb.collection('scontrini').getList(1, 100, {
-        sort: '-numero', expand: 'operatore,tavolo'
+        sort: '-numero', expand: 'operatore,tavolo',
+        filter: '(sessione="" || sessione=null)'
       })
       setScontrini(r.items)
     } catch(e) { console.error(e) }

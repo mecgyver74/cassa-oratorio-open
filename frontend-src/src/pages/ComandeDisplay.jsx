@@ -89,7 +89,7 @@ export default function ComandeDisplay() {
       pb.autoCancellation(false)
 
       const [sc, com, evaseList, pronteList] = await Promise.all([
-        pb.collection('scontrini').getFullList({ filter: `stornato=false`, sort: '-data_ora' }),
+        pb.collection('scontrini').getFullList({ filter: `stornato=false && (sessione="" || sessione=null)`, sort: '-data_ora' }),
         pb.collection('comande').getFullList({ sort: 'ordine,nome', filter: 'abilitata=true' }),
         pb.collection('comande_evase').getFullList().catch(() => []),
         pb.collection('righe_pronte').getFullList().catch(() => null),

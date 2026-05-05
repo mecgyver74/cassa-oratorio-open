@@ -38,18 +38,20 @@ export default function Statistiche({ utente }) {
   useEffect(() => { caricaSessioni() }, [caricaSessioni])
 
   // Costruisce il filtro in base alla vista
+  // Nota: per "sessione corrente" usiamo (sessione="" || sessione=null) per compatibilità
+  // con scontrini creati prima che il campo sessione fosse esplicito
   const buildFilter = useCallback(() => {
-    if (vista === 'corrente')                        return 'sessione=""'
-    if (vista === 'sessione' && sessVista)           return `sessione="${sessVista.id}"`
-    if (vista === 'perdata')                         return `data_ora>="${dal} 00:00:00" && data_ora<="${al} 23:59:59"`
-    return 'sessione=""'
+    if (vista === 'corrente')        return '(sessione="" || sessione=null)'
+    if (vista === 'sessione' && sessVista) return `sessione="${sessVista.id}"`
+    if (vista === 'perdata')         return `data_ora>="${dal} 00:00:00" && data_ora<="${al} 23:59:59"`
+    return '(sessione="" || sessione=null)'
   }, [vista, sessVista, dal, al])
 
   const buildRigheFilter = useCallback(() => {
-    if (vista === 'corrente')                        return 'scontrino.sessione=""'
-    if (vista === 'sessione' && sessVista)           return `scontrino.sessione="${sessVista.id}"`
-    if (vista === 'perdata')                         return `scontrino.data_ora>="${dal} 00:00:00" && scontrino.data_ora<="${al} 23:59:59"`
-    return 'scontrino.sessione=""'
+    if (vista === 'corrente')        return '(scontrino.sessione="" || scontrino.sessione=null)'
+    if (vista === 'sessione' && sessVista) return `scontrino.sessione="${sessVista.id}"`
+    if (vista === 'perdata')         return `scontrino.data_ora>="${dal} 00:00:00" && scontrino.data_ora<="${al} 23:59:59"`
+    return '(scontrino.sessione="" || scontrino.sessione=null)'
   }, [vista, sessVista, dal, al])
 
   const carica = useCallback(async () => {
@@ -85,35 +87,182 @@ export default function Statistiche({ utente }) {
   const incassoLordo   = validi.reduce((s, x) => s + (x.totale_lordo || 0), 0)
   const scontiTot      = incassoLordo - incasso
   const stornati       = scontrini.filter(s => s.stornato).length
-  const incassoContanti = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const incassoCarta    = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const incassoOmaggio  = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
+  const incassoContanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const incassoCarta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const incassoSatispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const incassoOmaggio   = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
   const qtaOmaggi       = venduto.reduce((s, v) => s + (v.omaggi || 0), 0)
 
-  // ── Elimina scontrini (solo per-data o admin) ────────────────
+  // ── Elimina scontrini + sessioni collegate ───────────────────
   const eliminaScontriniPeriodo = async (tutto) => {
-    const msg = tutto
-      ? 'Eliminare TUTTI gli scontrini? Questa operazione è irreversibile!'
-      : `Eliminare tutti gli scontrini del periodo selezionato? Operazione irreversibile!`
-    if (!fsConfirm(msg)) return
+    // Messaggio di conferma contestuale
+    let msg1, msg2 = null
+    if (tutto) {
+      msg1 = `⚠ ATTENZIONE\n\nStai per eliminare TUTTI gli scontrini e TUTTE le ${sessioni.length} sessioni archiviate.\n\nVerranno cancellati permanentemente tutti i dati storici della cassa.`
+      msg2 = `Conferma finale: sei sicuro di voler cancellare l'intera cronologia? L'operazione è IRREVERSIBILE.`
+    } else if (vista === 'sessione' && sessVista) {
+      msg1 = `Eliminare la sessione "${sessVista.nome}"?\n\nVerranno cancellati ${scontrini.length} scontrini e il record sessione. Operazione irreversibile.`
+    } else if (vista === 'perdata') {
+      msg1 = `Eliminare i ${scontrini.length} scontrini del periodo ${dal} — ${al}?\n\nSe una sessione archiviata resta senza scontrini verrà eliminata anch'essa. Operazione irreversibile.`
+    } else {
+      msg1 = `Eliminare i ${scontrini.length} scontrini della sessione corrente? Operazione irreversibile.`
+    }
+
+    if (!fsConfirm(msg1)) return
+    if (msg2 && !fsConfirm(msg2)) return
+
     setEliminando(true)
     try {
       pb.autoCancellation(false)
       const filter = tutto ? '' : buildFilter()
-      const lista = await pb.collection('scontrini').getFullList({ filter, fields: 'id' })
+      const lista = await pb.collection('scontrini').getFullList({ filter, fields: 'id,sessione' })
+
+      // Raccogli gli ID delle sessioni coinvolte (per verificare dopo se sono vuote)
+      const sessioniCoinvolte = new Set(lista.map(s => s.sessione).filter(Boolean))
+
       for (const s of lista) {
         const righe = await pb.collection('righe_scontrino').getFullList({ filter: `scontrino="${s.id}"`, fields: 'id' })
         for (const r of righe) await pb.collection('righe_scontrino').delete(r.id)
+        // Pulisci anche i movimenti magazzino collegati
+        try {
+          const movs = await pb.collection('movimenti_magazzino').getFullList({ filter: `scontrino="${s.id}"`, fields: 'id' })
+          for (const m of movs) await pb.collection('movimenti_magazzino').delete(m.id)
+        } catch(_) {}
         await pb.collection('scontrini').delete(s.id)
       }
+
+      // Elimina le sessioni_cassa associate
+      if (tutto) {
+        // Cancella tutte le sessioni
+        const tutteSess = await pb.collection('sessioni_cassa').getFullList({ fields: 'id' })
+        for (const s of tutteSess) await pb.collection('sessioni_cassa').delete(s.id)
+      } else if (vista === 'sessione' && sessVista) {
+        // Cancella il record della sessione specifica
+        await pb.collection('sessioni_cassa').delete(sessVista.id).catch(() => {})
+        setSessVista(null)
+        setVista('corrente')
+      } else if (sessioniCoinvolte.size > 0) {
+        // Per-data o corrente: cancella le sessioni che ora non hanno più scontrini
+        for (const sessId of sessioniCoinvolte) {
+          const rimasti = await pb.collection('scontrini').getList(1, 1, { filter: `sessione="${sessId}"`, fields: 'id' })
+          if (rimasti.totalItems === 0) {
+            await pb.collection('sessioni_cassa').delete(sessId).catch(() => {})
+          }
+        }
+      }
+
       pb.autoCancellation(true)
       toast(`Eliminati ${lista.length} scontrini`, 'v')
+      caricaSessioni()
       carica()
     } catch(e) {
       pb.autoCancellation(true)
       toast('Errore: ' + e.message, 'r')
     }
     setEliminando(false)
+  }
+
+  // ── Export Magazzino ─────────────────────────────────────────
+  const caricaMagazzino = async () => {
+    const [prodotti, famiglie, magComuni] = await Promise.all([
+      pb.collection('prodotti').getFullList({ sort: 'ordine,nome', filter: 'attivo=true', expand: 'famiglia,magazzino_comune' }),
+      pb.collection('famiglie').getFullList({ sort: 'ordine,nome' }),
+      pb.collection('magazzini_comuni').getFullList({ sort: 'nome' }),
+    ])
+    return { prodotti, famiglie, magComuni }
+  }
+
+  // Ordina prodotti come in cassa: per ordine famiglia, poi ordine prodotto
+  const ordinaComeCassa = (prodotti, famiglie) => {
+    const famOrd = {}
+    famiglie.forEach((f, i) => { famOrd[f.id] = i })
+    return prodotti.slice().sort((a, b) => {
+      const oa = famOrd[a.famiglia] ?? 999
+      const ob = famOrd[b.famiglia] ?? 999
+      if (oa !== ob) return oa - ob
+      if ((a.ordine || 0) !== (b.ordine || 0)) return (a.ordine || 0) - (b.ordine || 0)
+      return a.nome.localeCompare(b.nome)
+    })
+  }
+
+  const exportMagazzinoXLSX = async () => {
+    const { prodotti, famiglie, magComuni } = await caricaMagazzino()
+    const wb = XLSX.utils.book_new()
+
+    // Foglio 1: Prodotti con magazzino proprio
+    const propri = ordinaComeCassa(prodotti.filter(p => !p.magazzino_comune), famiglie)
+    const wsPropri = XLSX.utils.aoa_to_sheet([
+      ['Prodotto', 'Famiglia', 'Scorta', 'Soglia allarme', 'Unità', 'Stato'],
+      ...propri.map(p => {
+        const fam = famiglie.find(f => f.id === p.famiglia)
+        const stato = p.quantita < 0 ? 'Infinita' : p.quantita <= 0 ? 'ESAURITO' : p.quantita <= p.soglia_allarme ? 'BASSO' : 'OK'
+        return [p.nome, fam?.nome || '—', p.quantita < 0 ? '∞' : p.quantita, p.soglia_allarme || 0, p.unita || 'pz', stato]
+      })
+    ])
+    wsPropri['!cols'] = [{wch:28},{wch:16},{wch:8},{wch:14},{wch:6},{wch:10}]
+    XLSX.utils.book_append_sheet(wb, wsPropri, 'Prodotti')
+
+    // Foglio 2: Magazzini comuni
+    const wsMC = XLSX.utils.aoa_to_sheet([
+      ['Magazzino comune', 'Scorta', 'Soglia allarme', 'Stato'],
+      ...magComuni.map(m => {
+        const stato = m.quantita <= 0 ? 'ESAURITO' : m.quantita <= m.soglia_allarme ? 'BASSO' : 'OK'
+        return [m.nome, m.quantita, m.soglia_allarme || 0, stato]
+      })
+    ])
+    wsMC['!cols'] = [{wch:24},{wch:8},{wch:14},{wch:10}]
+    XLSX.utils.book_append_sheet(wb, wsMC, 'Magazzini comuni')
+
+    XLSX.writeFile(wb, `magazzino_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`)
+  }
+
+  const stampaMagazzinoPDF = async () => {
+    const { prodotti, famiglie, magComuni } = await caricaMagazzino()
+    const propri = ordinaComeCassa(prodotti.filter(p => !p.magazzino_comune), famiglie)
+    const now = new Date().toLocaleString('it-IT')
+
+    const rigaPropri = propri.map(p => {
+      const fam = famiglie.find(f => f.id === p.famiglia)
+      const scorta = p.quantita < 0 ? '∞' : p.quantita
+      const stato = p.quantita < 0 ? '' : p.quantita <= 0 ? 'ESAURITO' : p.quantita <= p.soglia_allarme ? 'BASSO' : ''
+      const col = p.quantita < 0 ? '' : p.quantita <= 0 ? '#dc2626' : p.quantita <= p.soglia_allarme ? '#d97706' : ''
+      return `<tr><td>${p.nome}</td><td>${fam?.nome||'—'}</td><td style="text-align:center;font-weight:700;color:${col}">${scorta}</td><td style="text-align:center">${p.soglia_allarme||0}</td><td style="text-align:center">${p.unita||'pz'}</td><td style="text-align:center;color:${col};font-weight:700">${stato}</td></tr>`
+    }).join('')
+
+    const rigaMC = magComuni.map(m => {
+      const stato = m.quantita <= 0 ? 'ESAURITO' : m.quantita <= m.soglia_allarme ? 'BASSO' : ''
+      const col = m.quantita <= 0 ? '#dc2626' : m.quantita <= m.soglia_allarme ? '#d97706' : ''
+      return `<tr><td>${m.nome}</td><td style="text-align:center;font-weight:700;color:${col}">${m.quantita}</td><td style="text-align:center">${m.soglia_allarme||0}</td><td style="text-align:center;color:${col};font-weight:700">${stato}</td></tr>`
+    }).join('')
+
+    const html = `<html><head><title>Magazzino</title>
+      <style>
+        body{font-family:Arial,sans-serif;font-size:12px;margin:20px}
+        h1{font-size:16px;margin-bottom:2px}h2{font-size:13px;margin:18px 0 6px;border-bottom:2px solid #333;padding-bottom:3px}
+        p{font-size:10px;color:#666;margin:0 0 12px}
+        table{width:100%;border-collapse:collapse;margin-bottom:8px}
+        th{background:#1e293b;color:#fff;text-align:left;padding:5px 7px;font-size:11px}
+        td{padding:4px 7px;border-bottom:1px solid #e5e7eb;font-size:11px}
+        tr:nth-child(even){background:#f9fafb}
+        @media print{body{margin:0}}
+      </style></head><body>
+      <h1>Situazione Magazzino — Cassa Dalila</h1>
+      <p>Stampato: ${now}</p>
+      <h2>Prodotti (${propri.length})</h2>
+      <table><thead><tr><th>Prodotto</th><th>Famiglia</th><th>Scorta</th><th>Soglia</th><th>Unità</th><th>Stato</th></tr></thead><tbody>${rigaPropri}</tbody></table>
+      ${magComuni.length > 0 ? `<h2>Magazzini comuni (${magComuni.length})</h2>
+      <table><thead><tr><th>Nome</th><th>Scorta</th><th>Soglia</th><th>Stato</th></tr></thead><tbody>${rigaMC}</tbody></table>` : ''}
+      </body></html>`
+
+    const oldFrame = document.getElementById('_print_mag')
+    if (oldFrame) oldFrame.remove()
+    const iframe = document.createElement('iframe')
+    iframe.id = '_print_mag'
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentDocument || iframe.contentWindow.document
+    doc.open(); doc.write(html); doc.close()
+    iframe.onload = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => iframe.remove(), 5000) }
   }
 
   // ── Stampa ───────────────────────────────────────────────────
@@ -125,7 +274,7 @@ export default function Statistiche({ utente }) {
     const wasFs = !!document.fullscreenElement
     const html = `<html><head><title>Statistiche ${titoloVista}</title>
       <style>
-        body{font-family:Arial,sans-serif;font-size:12px;margin:20px}
+        body{font-family:Arial,sans-serif;font-size:14px;margin:20px}
         h1{font-size:18px;margin-bottom:4px}h2{font-size:14px;margin:16px 0 6px;border-bottom:1px solid #ccc;padding-bottom:4px}
         .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
         .card{border:1px solid #ddd;border-radius:6px;padding:10px}
@@ -142,12 +291,13 @@ export default function Statistiche({ utente }) {
         <div class="card"><div class="card-label">Media scontrino</div><div class="card-val">${EUR(validi.length ? incasso/validi.length : 0)}</div></div>
         <div class="card"><div class="card-label">Contanti</div><div class="card-val">${EUR(incassoContanti)}</div></div>
         <div class="card"><div class="card-label">Carta</div><div class="card-val">${EUR(incassoCarta)}</div></div>
+        ${incassoSatispay > 0 ? `<div class="card"><div class="card-label">Satispay</div><div class="card-val">${EUR(incassoSatispay)}</div></div>` : ''}
         <div class="card"><div class="card-label">Sconti totali</div><div class="card-val">${EUR(scontiTot)}</div></div>
       </div>
       <h2>Venduto per prodotto</h2>
-      <table><thead><tr><th>Prodotto</th><th>Quantità</th><th>Omaggi</th><th>Totale</th></tr></thead><tbody>
-        ${venduto.map(v => `<tr><td>${v.nome}</td><td>${v.qta}</td><td>${v.omaggi||'-'}</td><td><b>${EUR(v.tot)}</b></td></tr>`).join('')}
-        <tr style="background:#f9f9f9;font-weight:bold"><td>TOTALE</td><td>${venduto.reduce((s,v)=>s+v.qta,0)}</td><td></td><td>${EUR(incasso)}</td></tr>
+      <table><thead><tr><th>Prodotto</th><th>Qtà totale</th><th>di cui omaggi</th><th>Qtà pagata</th><th>Totale</th></tr></thead><tbody>
+        ${venduto.map(v => `<tr><td>${v.nome}</td><td>${v.qta+(v.omaggi||0)}</td><td>${v.omaggi||'-'}</td><td>${v.qta}</td><td><b>${EUR(v.tot)}</b></td></tr>`).join('')}
+        <tr style="background:#f9f9f9;font-weight:bold"><td>TOTALE</td><td>${venduto.reduce((s,v)=>s+v.qta+(v.omaggi||0),0)}</td><td>${venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'-'}</td><td>${venduto.reduce((s,v)=>s+v.qta,0)}</td><td>${EUR(incasso)}</td></tr>
       </tbody></table></body></html>`
     const oldFrame = document.getElementById('_print_stats')
     if (oldFrame) oldFrame.remove()
@@ -193,6 +343,7 @@ export default function Statistiche({ utente }) {
       ['Media scontrino', parseFloat((validi.length ? incasso/validi.length : 0).toFixed(2))],
       ['Contanti', parseFloat(incassoContanti.toFixed(2))],
       ['Carta', parseFloat(incassoCarta.toFixed(2))],
+      ['Satispay', parseFloat(incassoSatispay.toFixed(2))],
     ])
     ws3['!cols'] = [{wch:20},{wch:20}]
     XLSX.utils.book_append_sheet(wb, ws3, 'Riepilogo')
@@ -207,7 +358,7 @@ export default function Statistiche({ utente }) {
       {/* Titolo + azioni */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10 }}>
         <div className="page-title" style={{ margin:0 }}>Statistiche</div>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
           {utente?.ruolo === 'admin' && vista === 'corrente' && (
             <button onClick={() => setMostraChi(true)} style={{
               padding:'7px 16px', background:'#b45309', color:'#fff', border:'none',
@@ -217,16 +368,25 @@ export default function Statistiche({ utente }) {
             </button>
           )}
           <button onClick={stampa} style={{ padding:'7px 14px', background:'#1e293b', color:'#f1f5f9', border:'none', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer' }}>
-            Stampa
+            🖨 Stampa
           </button>
           <button onClick={exportXLSX} style={{ padding:'7px 14px', background:'var(--green)', color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+            ⬇ Excel
+          </button>
+          {/* separatore */}
+          <div style={{ width:1, height:28, background:'var(--border)', flexShrink:0 }} />
+          <span style={{ fontSize:11, color:'var(--text3)', fontWeight:600, whiteSpace:'nowrap' }}>Magazzino:</span>
+          <button onClick={stampaMagazzinoPDF} style={{ padding:'7px 14px', background:'#0369a1', color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+            🖨 PDF
+          </button>
+          <button onClick={exportMagazzinoXLSX} style={{ padding:'7px 14px', background:'#0369a1', color:'#fff', border:'2px solid #7dd3fc', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer' }}>
             ⬇ Excel
           </button>
         </div>
       </div>
 
-      {/* Tab sessioni */}
-      <div style={{ display:'flex', gap:6, overflowX:'auto', marginBottom:14, paddingBottom:2 }}>
+      {/* Selettore vista */}
+      <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:14, flexWrap:'wrap' }}>
         <TabBtn
           label="Sessione corrente"
           active={vista === 'corrente'}
@@ -237,18 +397,45 @@ export default function Statistiche({ utente }) {
           active={vista === 'perdata'}
           onClick={() => { setVista('perdata'); setSessVista(null) }}
         />
+
         {sessioni.length > 0 && (
-          <div style={{ width:1, background:'var(--border)', margin:'0 4px', flexShrink:0 }} />
+          <>
+            <div style={{ width:1, background:'var(--border)', alignSelf:'stretch', flexShrink:0 }} />
+            <div style={{ position:'relative', display:'flex', alignItems:'center' }}>
+              <select
+                value={vista === 'sessione' ? (sessVista?.id || '') : ''}
+                onChange={e => {
+                  const s = sessioni.find(s => s.id === e.target.value)
+                  if (s) { setVista('sessione'); setSessVista(s) }
+                }}
+                style={{
+                  appearance: 'none', WebkitAppearance: 'none',
+                  paddingLeft: 12, paddingRight: 32, paddingTop: 7, paddingBottom: 7,
+                  borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  border: `1px solid ${vista === 'sessione' ? 'var(--accent)' : 'var(--border)'}`,
+                  background: vista === 'sessione' ? 'var(--accent)' : 'var(--surf2)',
+                  color: vista === 'sessione' ? '#fff' : 'var(--text2)',
+                  minWidth: 220, maxWidth: 340,
+                }}
+              >
+                <option value="" disabled>
+                  📦 Archivio sessioni ({sessioni.length})
+                </option>
+                {sessioni.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.nome || `Sessione #${s.numero_sessione}`}
+                    {s.scontrini_count != null ? `  ·  ${s.scontrini_count} sc  ·  ${EUR(s.totale_netto)}` : ''}
+                  </option>
+                ))}
+              </select>
+              {/* freccia custom */}
+              <span style={{
+                position:'absolute', right:10, pointerEvents:'none',
+                color: vista === 'sessione' ? '#fff' : 'var(--text3)', fontSize:11,
+              }}>▼</span>
+            </div>
+          </>
         )}
-        {sessioni.map(s => (
-          <TabBtn
-            key={s.id}
-            label={s.nome || `Sessione #${s.numero_sessione}`}
-            sub={s.scontrini_count != null ? `${s.scontrini_count} sc · ${EUR(s.totale_netto)}` : ''}
-            active={vista === 'sessione' && sessVista?.id === s.id}
-            onClick={() => { setVista('sessione'); setSessVista(s) }}
-          />
-        ))}
       </div>
 
       {/* Filtro per data (solo in modo perdata) */}
@@ -279,6 +466,7 @@ export default function Statistiche({ utente }) {
         <div className="stat-card"><div className="stat-card-label">Media scontrino</div><div className="stat-card-val">{EUR(validi.length ? incasso/validi.length : 0)}</div></div>
         <div className="stat-card"><div className="stat-card-label">Contanti</div><div className="stat-card-val">{EUR(incassoContanti)}</div></div>
         <div className="stat-card"><div className="stat-card-label">Carta</div><div className="stat-card-val">{EUR(incassoCarta)}</div></div>
+        {incassoSatispay > 0 && <div className="stat-card"><div className="stat-card-label">Satispay</div><div className="stat-card-val" style={{color:'#a855f7'}}>{EUR(incassoSatispay)}</div></div>}
         {incassoOmaggio > 0 && <div className="stat-card"><div className="stat-card-label">Omaggi (valore)</div><div className="stat-card-val" style={{color:'var(--green)'}}>{EUR(incassoOmaggio)}</div></div>}
         {qtaOmaggi > 0 && <div className="stat-card"><div className="stat-card-label">Pezzi omaggiati</div><div className="stat-card-val" style={{color:'var(--green)'}}>{qtaOmaggi}</div></div>}
         <div className="stat-card"><div className="stat-card-label">Sconti</div><div className="stat-card-val">{EUR(scontiTot)}</div></div>
@@ -290,19 +478,23 @@ export default function Statistiche({ utente }) {
       <div className="table-box" style={{ marginBottom:16 }}>
         <div className="table-box-head">Venduto per prodotto</div>
         <table>
-          <thead><tr><th>Prodotto</th><th>Quantità</th><th>Omaggi</th><th>Totale</th></tr></thead>
+          <thead><tr><th>Prodotto</th><th>Qtà totale</th><th>di cui omaggi</th><th>Qtà pagata</th><th>Totale</th></tr></thead>
           <tbody>
             {venduto.map((v, i) => (
               <tr key={i}>
                 <td style={{ fontWeight:600 }}>{v.nome}</td>
-                <td>{v.qta}</td>
+                <td>{v.qta + (v.omaggi || 0)}</td>
                 <td style={{ color:'var(--green)' }}>{v.omaggi || '—'}</td>
+                <td>{v.qta}</td>
                 <td style={{ fontWeight:700, color:'var(--accent2)', fontFamily:'Barlow Condensed', fontSize:15 }}>{EUR(v.tot)}</td>
               </tr>
             ))}
             {venduto.length > 0 && (
               <tr style={{ fontWeight:700, background:'var(--surf2)' }}>
-                <td>TOTALE</td><td>{venduto.reduce((s,v)=>s+v.qta,0)}</td><td>{venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'—'}</td>
+                <td>TOTALE</td>
+                <td>{venduto.reduce((s,v)=>s+v.qta+(v.omaggi||0),0)}</td>
+                <td style={{ color:'var(--green)' }}>{venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'—'}</td>
+                <td>{venduto.reduce((s,v)=>s+v.qta,0)}</td>
                 <td style={{ color:'var(--green)', fontFamily:'Barlow Condensed', fontSize:15 }}>{EUR(incasso)}</td>
               </tr>
             )}
@@ -314,25 +506,41 @@ export default function Statistiche({ utente }) {
       {/* Storico scontrini */}
       <div className="table-box">
         <div className="table-box-head" style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span>Storico scontrini</span>
+          <span>
+            Storico scontrini
+            {vista !== 'corrente' && (
+              <span style={{ marginLeft:8, fontSize:11, fontWeight:400, color:'var(--text3)',
+                background:'var(--surf2)', border:'1px solid var(--border)',
+                borderRadius:4, padding:'2px 7px' }}>
+                sola lettura
+              </span>
+            )}
+          </span>
           {utente?.ruolo === 'admin' && (
             <div style={{ display:'flex', gap:6 }}>
               <button onClick={() => eliminaScontriniPeriodo(false)} disabled={eliminando || !scontrini.length}
-                style={{ padding:'4px 10px', fontSize:12, background:'#fef2f2', color:'var(--red)', border:'1px solid #fecaca', borderRadius:6, cursor:'pointer', fontWeight:600 }}>
-                {eliminando ? '...' : 'Elimina selezione'}
+                style={{ padding:'4px 10px', fontSize:12, background:'#fef2f2', color:'var(--red)', border:'1px solid #fecaca', borderRadius:6, cursor: (eliminando || !scontrini.length) ? 'default' : 'pointer', fontWeight:600, opacity: (eliminando || !scontrini.length) ? .5 : 1 }}>
+                {eliminando ? '...' : vista === 'sessione' ? 'Elimina sessione' : vista === 'perdata' ? 'Elimina periodo' : 'Elimina corrente'}
               </button>
               <button onClick={() => eliminaScontriniPeriodo(true)} disabled={eliminando}
-                style={{ padding:'4px 10px', fontSize:12, background:'var(--red)', color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontWeight:600 }}>
-                {eliminando ? '...' : 'Elimina tutto'}
+                title="Elimina tutti gli scontrini e tutte le sessioni archiviate"
+                style={{ padding:'4px 10px', fontSize:12, background:'var(--red)', color:'#fff', border:'none', borderRadius:6, cursor: eliminando ? 'default' : 'pointer', fontWeight:600, opacity: eliminando ? .5 : 1 }}>
+                {eliminando ? '...' : '⚠ Elimina tutto'}
               </button>
             </div>
           )}
         </div>
         <table>
-          <thead><tr><th>#</th><th>Data/Ora</th><th>Operatore</th><th>Lordo</th><th>Sconto</th><th>Netto</th><th>Pagamento</th><th>Stato</th></tr></thead>
+          <thead>
+            <tr>
+              <th>#</th><th>Data/Ora</th><th>Operatore</th>
+              <th>Lordo</th><th>Sconto</th><th>Netto</th>
+              <th>Pagamento</th><th>Stato</th>
+            </tr>
+          </thead>
           <tbody>
             {scontrini.map(s => (
-              <tr key={s.id}>
+              <tr key={s.id} style={{ opacity: s.stornato ? .55 : 1 }}>
                 <td style={{ fontWeight:700, fontFamily:'Barlow Condensed' }}>#{String(s.numero).padStart(4,'0')}</td>
                 <td>{new Date(s.data_ora).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
                 <td style={{ fontSize:12, color:'var(--text2)' }}>{s.postazione||'—'}</td>
