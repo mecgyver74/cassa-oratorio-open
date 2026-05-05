@@ -187,11 +187,14 @@ if (-not (Test-Path $PbExe)) {
     }
 }
 
-# ── FASE 2: Sblocca exe da Windows SmartScreen ───────────────
-# File scaricati da internet sono "bloccati" da Windows - questo li sblocca
+# ── FASE 2: Sblocca file da Windows SmartScreen ──────────────
+# File sincronizzati da Google Drive vengono marcati come "da internet".
+# Unblock-File rimuove il blocco su tutti gli script e l'eseguibile.
 try {
+    Get-ChildItem $Root -File | Where-Object { $_.Extension -in ".bat",".ps1",".exe",".js" } |
+        ForEach-Object { Unblock-File $_.FullName -EA SilentlyContinue }
     Unblock-File -Path $PbExe -EA SilentlyContinue
-    LogOK "pocketbase.exe sbloccato"
+    LogOK "File sbloccati (Zone.Identifier rimosso)"
 } catch { }
 
 # ── FASE 3: Primo avvio ──────────────────────────────────────
