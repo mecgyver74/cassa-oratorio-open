@@ -26,6 +26,7 @@ Cassa_Dalila.zip
 *.zip
 *.tmp
 _cassa.lock
+_build_info.txt
 SIMULA_DATI.*
 frontend-src/build_out.txt
 frontend-src/vite_out.txt

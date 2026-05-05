@@ -65,6 +65,15 @@ Write-Host ""
 Write-Host "  +=============================================+" -ForegroundColor Yellow
 Write-Host "  |       CASSA DALILA  v1.0.0              |" -ForegroundColor Yellow
 Write-Host "  +=============================================+" -ForegroundColor Yellow
+
+# Mostra data e bundle dell'ultimo build frontend
+$buildInfoFile = Join-Path $Root "_build_info.txt"
+if (Test-Path $buildInfoFile) {
+    try {
+        $bi = Get-Content $buildInfoFile -Raw | ConvertFrom-Json
+        Write-Host "  Build: $($bi.data)   Bundle: $($bi.bundle)" -ForegroundColor DarkGray
+    } catch { }
+}
 Write-Host ""
 
 # ── Lock file: impedisce doppio avvio ────────────────────────

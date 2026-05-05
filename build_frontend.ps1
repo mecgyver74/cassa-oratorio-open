@@ -91,14 +91,24 @@ try {
     Write-Host "  AVVISO: git add non riuscito ($_)" -ForegroundColor Yellow
 }
 
+# ── Scrivi _build_info.txt ────────────────────────────────────
+$bundleJs  = (Get-ChildItem "$DistTemp\assets" -Filter "index-*.js"  -EA SilentlyContinue | Select-Object -First 1).Name
+$bundleCss = (Get-ChildItem "$DistTemp\assets" -Filter "index-*.css" -EA SilentlyContinue | Select-Object -First 1).Name
+$gitCommit = (git -C $Root log --oneline -1 2>$null) -replace ' .*',''
+[PSCustomObject]@{
+    data   = (Get-Date -Format "dd/MM/yyyy HH:mm:ss")
+    bundle = $bundleJs
+    css    = $bundleCss
+    commit = $gitCommit
+} | ConvertTo-Json | Set-Content (Join-Path $Root "_build_info.txt") -Encoding UTF8
+OK "_build_info.txt aggiornato"
+
 Write-Host ""
 Write-Host "  ================================================" -ForegroundColor Green
 Write-Host "    BUILD E DEPLOY COMPLETATI                    " -ForegroundColor Green
 Write-Host "  ================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Prossimi passi:" -ForegroundColor White
-Write-Host "  1. Attendi che Google Drive sincronizzi i file" -ForegroundColor White
-Write-Host "  2. Riavvia la cassa sull'altro PC (CassaOratorio.ps1)" -ForegroundColor White
-Write-Host "  3. Apri il browser e fai Ctrl+Shift+R" -ForegroundColor White
+Write-Host "  Prossimo passo: esegui check_sync.ps1 per verificare" -ForegroundColor Cyan
+Write-Host "  che Google Drive abbia sincronizzato i file." -ForegroundColor Cyan
 Write-Host ""
 Read-Host "Premi INVIO per uscire"
