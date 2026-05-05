@@ -14,7 +14,7 @@ $DestPublic      = Join-Path $Root "app\pb_public"
 $DestFrontDist   = Join-Path $Root "frontend-dist"
 $DestSrcDist     = Join-Path $SrcDir "dist"
 
-function Step($n, $msg) { Write-Host "`n[$n/5] $msg" -ForegroundColor Cyan }
+function Step($n, $msg) { Write-Host "`n[$n/6] $msg" -ForegroundColor Cyan }
 function OK($msg)        { Write-Host "  OK  $msg" -ForegroundColor Green }
 function Fail($msg)      { Write-Host "  ERR $msg" -ForegroundColor Red; Read-Host "Premi INVIO per uscire"; exit 1 }
 
@@ -73,6 +73,22 @@ Step 5 "Deploy in:"
 foreach ($dest in @($DestPublic, $DestFrontDist, $DestSrcDist)) {
     robocopy $DistTemp $dest /E /IS /NJH /NJS /NFL /NDL | Out-Null
     OK $dest
+}
+
+# ── 6. git add -f dei nuovi bundle (sono in .gitignore) ──────
+Step 6 "Aggiorna git con i nuovi bundle..."
+$gitRoot = $Root
+try {
+    $bundles = Get-ChildItem "$DistTemp\assets" -File | Where-Object { $_.Extension -in ".js",".css" }
+    foreach ($b in $bundles) {
+        foreach ($dest in @("app\pb_public\assets", "frontend-dist\assets", "frontend-src\dist\assets")) {
+            $rel = "$dest\$($b.Name)"
+            git -C $gitRoot add -f $rel 2>$null
+        }
+    }
+    OK "Bundle aggiornati in git"
+} catch {
+    Write-Host "  AVVISO: git add non riuscito ($_)" -ForegroundColor Yellow
 }
 
 Write-Host ""

@@ -23,8 +23,30 @@ backup/
 # File temporanei e build artifacts
 CassaOratorio.zip
 *.tmp
+frontend-src/build_out.txt
+frontend-src/vite_out.txt
 
 # File IDE
 *.code-workspace
 .vscode/
 .idea/
+
+# Metadati Windows
+desktop.ini
+**/desktop.ini
+
+# Claude Code
+.claude/
+
+# Cartelle generate automaticamente
+chiusure/
+app/frontend/
+app/pb_public/public/
+
+# Bundle Vite (gestiti da build_frontend.ps1 con git add -f)
+app/pb_public/assets/index-*.js
+app/pb_public/assets/index-*.css
+frontend-dist/assets/index-*.js
+frontend-dist/assets/index-*.css
+frontend-src/dist/assets/index-*.js
+frontend-src/dist/assets/index-*.css
