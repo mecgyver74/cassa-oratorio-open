@@ -28,9 +28,16 @@ function LogErr($msg)  { Log "ERRORE $msg" "Red" }
 function LogWarn($msg) { Log "AVVISO $msg" "Yellow" }
 
 function AggiornaCollegamentoDesktop {
-    $icoPath = Join-Path $AppDir "cassa.ico"
-    if (-not (Test-Path $icoPath)) { return }
+    $icoSrc = Join-Path $AppDir "cassa.ico"
+    if (-not (Test-Path $icoSrc)) { return }
     try {
+        # Copia l'icona in una cartella locale (%LOCALAPPDATA%) per evitare
+        # che Windows non riesca a caricarla quando Google Drive non è ancora montato.
+        $localDir = Join-Path $env:LOCALAPPDATA "CassaDalila"
+        New-Item -ItemType Directory -Path $localDir -Force | Out-Null
+        $localIco = Join-Path $localDir "cassa.ico"
+        Copy-Item $icoSrc $localIco -Force
+
         $desktop = [Environment]::GetFolderPath("Desktop")
         $lnkPath = Join-Path $desktop "Cassa Dalila.lnk"
         $wsh     = New-Object -ComObject WScript.Shell
@@ -38,7 +45,7 @@ function AggiornaCollegamentoDesktop {
         $lnk.TargetPath       = "powershell.exe"
         $lnk.Arguments        = "-ExecutionPolicy Bypass -File `"$ScriptPath`""
         $lnk.WorkingDirectory = $Root
-        $lnk.IconLocation     = "$icoPath,0"
+        $lnk.IconLocation     = "$localIco,0"
         $lnk.Description      = "Cassa Dalila"
         $lnk.WindowStyle      = 1
         $lnk.Save()
