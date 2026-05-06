@@ -274,30 +274,43 @@ export default function Statistiche({ utente }) {
     const wasFs = !!document.fullscreenElement
     const html = `<html><head><title>Statistiche ${titoloVista}</title>
       <style>
-        body{font-family:Arial,sans-serif;font-size:14px;margin:20px}
-        h1{font-size:18px;margin-bottom:4px}h2{font-size:14px;margin:16px 0 6px;border-bottom:1px solid #ccc;padding-bottom:4px}
-        .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
-        .card{border:1px solid #ddd;border-radius:6px;padding:10px}
-        .card-label{font-size:10px;color:#666;text-transform:uppercase}.card-val{font-size:20px;font-weight:bold}
-        .verde{color:#16a34a}table{width:100%;border-collapse:collapse;margin-bottom:16px}
-        th{background:#f3f4f6;text-align:left;padding:6px 8px;font-size:11px;border:1px solid #ddd}
-        td{padding:6px 8px;border:1px solid #ddd;font-size:11px}@media print{body{margin:0}}
+        @page{size:80mm auto;margin:2mm}
+        *{box-sizing:border-box}
+        body{font-family:Arial,sans-serif;font-size:15px;margin:3mm;width:74mm}
+        h1{font-size:17px;margin:0 0 2px;text-align:center}
+        .sub{font-size:12px;text-align:center;margin-bottom:6px;color:#555}
+        hr{border:none;border-top:1px dashed #999;margin:6px 0}
+        .riga{display:flex;justify-content:space-between;align-items:baseline;margin:3px 0}
+        .riga .lbl{font-size:13px;color:#444}
+        .riga .val{font-size:16px;font-weight:bold}
+        .riga .val.grande{font-size:20px}
+        .verde{color:#16a34a}
+        h2{font-size:14px;margin:8px 0 4px;border-bottom:1px solid #ccc;padding-bottom:2px}
+        table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:13px}
+        th{text-align:left;padding:3px 2px;font-size:12px;border-bottom:1px solid #999}
+        td{padding:3px 2px;border-bottom:1px dotted #ddd}
+        td.r,th.r{text-align:right}
+        tr.tot td{font-weight:bold;border-top:1px solid #999;border-bottom:none}
+        @media print{body{margin:0}}
       </style></head><body>
-      <h1>Statistiche Cassa Dalila</h1>
-      <p>${titoloVista} · Stampato: ${new Date().toLocaleString('it-IT')}</p>
-      <div class="summary">
-        <div class="card"><div class="card-label">Incasso netto</div><div class="card-val verde">${EUR(incasso)}</div></div>
-        <div class="card"><div class="card-label">Scontrini</div><div class="card-val">${validi.length}</div></div>
-        <div class="card"><div class="card-label">Media scontrino</div><div class="card-val">${EUR(validi.length ? incasso/validi.length : 0)}</div></div>
-        <div class="card"><div class="card-label">Contanti</div><div class="card-val">${EUR(incassoContanti)}</div></div>
-        <div class="card"><div class="card-label">Carta</div><div class="card-val">${EUR(incassoCarta)}</div></div>
-        ${incassoSatispay > 0 ? `<div class="card"><div class="card-label">Satispay</div><div class="card-val">${EUR(incassoSatispay)}</div></div>` : ''}
-        <div class="card"><div class="card-label">Sconti totali</div><div class="card-val">${EUR(scontiTot)}</div></div>
-      </div>
+      <h1>Cassa Dalila</h1>
+      <div class="sub">Statistiche · ${titoloVista}</div>
+      <div class="sub">${new Date().toLocaleString('it-IT')}</div>
+      <hr>
+      <div class="riga"><span class="lbl">Incasso netto</span><span class="val grande verde">${EUR(incasso)}</span></div>
+      <div class="riga"><span class="lbl">Scontrini</span><span class="val">${validi.length}</span></div>
+      <div class="riga"><span class="lbl">Media scontrino</span><span class="val">${EUR(validi.length ? incasso/validi.length : 0)}</span></div>
+      <hr>
+      <div class="riga"><span class="lbl">Contanti</span><span class="val">${EUR(incassoContanti)}</span></div>
+      <div class="riga"><span class="lbl">Carta</span><span class="val">${EUR(incassoCarta)}</span></div>
+      ${incassoSatispay > 0 ? `<div class="riga"><span class="lbl">Satispay</span><span class="val">${EUR(incassoSatispay)}</span></div>` : ''}
+      ${incassoOmaggio > 0 ? `<div class="riga"><span class="lbl">Omaggi</span><span class="val">${EUR(incassoOmaggio)}</span></div>` : ''}
+      ${scontiTot > 0 ? `<div class="riga"><span class="lbl">Sconti totali</span><span class="val">${EUR(scontiTot)}</span></div>` : ''}
+      <hr>
       <h2>Venduto per prodotto</h2>
-      <table><thead><tr><th>Prodotto</th><th>Qtà totale</th><th>di cui omaggi</th><th>Qtà pagata</th><th>Totale</th></tr></thead><tbody>
-        ${venduto.map(v => `<tr><td>${v.nome}</td><td>${v.qta+(v.omaggi||0)}</td><td>${v.omaggi||'-'}</td><td>${v.qta}</td><td><b>${EUR(v.tot)}</b></td></tr>`).join('')}
-        <tr style="background:#f9f9f9;font-weight:bold"><td>TOTALE</td><td>${venduto.reduce((s,v)=>s+v.qta+(v.omaggi||0),0)}</td><td>${venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'-'}</td><td>${venduto.reduce((s,v)=>s+v.qta,0)}</td><td>${EUR(incasso)}</td></tr>
+      <table><thead><tr><th>Prodotto</th><th class="r">Qtà</th><th class="r">Omag.</th><th class="r">Totale</th></tr></thead><tbody>
+        ${venduto.map(v => `<tr><td>${v.nome}</td><td class="r">${v.qta+(v.omaggi||0)}</td><td class="r">${v.omaggi||'-'}</td><td class="r"><b>${EUR(v.tot)}</b></td></tr>`).join('')}
+        <tr class="tot"><td>TOTALE</td><td class="r">${venduto.reduce((s,v)=>s+v.qta+(v.omaggi||0),0)}</td><td class="r">${venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'-'}</td><td class="r">${EUR(incasso)}</td></tr>
       </tbody></table></body></html>`
     const oldFrame = document.getElementById('_print_stats')
     if (oldFrame) oldFrame.remove()
