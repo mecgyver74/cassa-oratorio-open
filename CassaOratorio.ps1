@@ -329,15 +329,35 @@ Pannello admin database:<br>
 # pb_public è già aggiornato sopra
 
 # ── Rileva IP locale (serve per lock e per browser) ──────────
+# Strategia: preferisce l'IP sulla stessa subnet del gateway predefinito,
+# così se ci sono adattatori virtuali (VPN, VMware, VirtualBox, hotspot)
+# viene scelto quello della rete LAN reale.
 $localIP = $null
-$ips = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^127\.' }).IPAddress
-foreach ($ip in $ips) {
-    if ($ip -match '^192\.168\.' -or $ip -match '^10\.' -or $ip -match '^172\.(1[6-9]|2[0-9]|3[01])\.') {
-        $localIP = $ip; break
+$allIpObjs = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^127\.' }
+$privateIPs = ($allIpObjs | Where-Object {
+    $_.IPAddress -match '^192\.168\.' -or $_.IPAddress -match '^10\.' -or
+    $_.IPAddress -match '^172\.(1[6-9]|2[0-9]|3[01])\.'
+}).IPAddress
+
+# Tenta di scegliere l'IP sulla stessa subnet del gateway
+try {
+    $gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -EA Stop |
+           Sort-Object RouteMetric | Select-Object -First 1).NextHop
+    if ($gw) {
+        $gwPrefix = ($gw -split '\.')[0..2] -join '.'
+        $localIP = $privateIPs | Where-Object { $_.StartsWith($gwPrefix) } | Select-Object -First 1
     }
-}
-if (-not $localIP -and $ips) { $localIP = $ips | Select-Object -First 1 }
+} catch { }
+
+# Fallback: primo IP privato disponibile
+if (-not $localIP -and $privateIPs) { $localIP = $privateIPs | Select-Object -First 1 }
+if (-not $localIP -and $allIpObjs)  { $localIP = $allIpObjs[0].IPAddress }
 if (-not $localIP) { $localIP = "127.0.0.1" }
+
+# Mostra tutti gli IP per diagnosi (utile se il multicassa non funziona)
+if ($privateIPs -and $privateIPs.Count -gt 1) {
+    Log "IP disponibili: $($privateIPs -join ', ')  →  uso $localIP" "DarkGray"
+}
 
 # ── Firewall: apri porta per multicassa ─────────────────────
 # Controlla ad ogni avvio, non solo al primo, perché la regola potrebbe
@@ -412,7 +432,8 @@ Write-Host ""
 Write-Host "  +=============================================+" -ForegroundColor Green
 Write-Host "  |  OK  CASSA DALILA e' in esecuzione!     |" -ForegroundColor Green
 Write-Host "  |                                           |" -ForegroundColor Green
-Write-Host "  |  Apri: http://127.0.0.1:$PB_PORT              |" -ForegroundColor Green
+Write-Host "  |  Locale:  http://127.0.0.1:$PB_PORT          |" -ForegroundColor Green
+Write-Host "  |  Rete:    http://${localIP}:$PB_PORT          |" -ForegroundColor Cyan
 Write-Host "  |  NON chiudere questa finestra!            |" -ForegroundColor DarkGreen
 Write-Host "  +=============================================+" -ForegroundColor Green
 Write-Host ""
