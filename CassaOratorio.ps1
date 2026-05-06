@@ -238,19 +238,6 @@ if ($cfg.firstRun -or -not $cfg.adminEmail) {
         } while ($plain.Length -lt 8)
     }
 
-    # Apri porta firewall per accesso da rete locale (silenzioso, richiede admin)
-try {
-    $fwRule = Get-NetFirewallRule -DisplayName "Cassa Dalila" -ErrorAction SilentlyContinue
-    if (-not $fwRule) {
-        New-NetFirewallRule -DisplayName "Cassa Dalila" `
-            -Direction Inbound -Protocol TCP -LocalPort $PB_PORT `
-            -Action Allow -Profile Any -ErrorAction Stop | Out-Null
-        Log "Regola firewall aggiunta (porta $PB_PORT aperta per rete locale)" "Green"
-    }
-} catch {
-    LogWarn "Impossibile aggiungere regola firewall (esegui come amministratore per accesso da rete)"
-}
-
 Log "Avvio PocketBase (finestra visibile - accetta eventuali avvisi)..."
 
     # In PB v0.36 il superuser si crea con --automigrate
@@ -351,6 +338,23 @@ foreach ($ip in $ips) {
 }
 if (-not $localIP -and $ips) { $localIP = $ips | Select-Object -First 1 }
 if (-not $localIP) { $localIP = "127.0.0.1" }
+
+# ── Firewall: apri porta per multicassa ─────────────────────
+# Controlla ad ogni avvio, non solo al primo, perché la regola potrebbe
+# non essere stata creata (script non admin) o essere stata rimossa.
+try {
+    $fwRule = Get-NetFirewallRule -DisplayName "Cassa Dalila" -EA SilentlyContinue
+    if (-not $fwRule) {
+        New-NetFirewallRule -DisplayName "Cassa Dalila" `
+            -Direction Inbound -Protocol TCP -LocalPort $PB_PORT `
+            -Action Allow -Profile Any -EA Stop | Out-Null
+        LogOK "Regola firewall aggiunta (porta $PB_PORT aperta per multicassa)"
+    } else {
+        Log "Firewall OK (porta $PB_PORT gia' aperta)"
+    }
+} catch {
+    LogWarn "Firewall: impossibile aprire porta $PB_PORT (richiede admin). Multicassa potrebbe non funzionare."
+}
 
 # ── FASE 5: Avvia PocketBase ─────────────────────────────────
 # Termina eventuale istanza precedente rimasta attiva
