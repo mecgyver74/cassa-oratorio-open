@@ -125,25 +125,37 @@ if ($lock) {
         Read-Host "  Premi INVIO per uscire"
         exit 0
     } elseif ($lock.hostname -ne $env:COMPUTERNAME) {
-        # Lock da altro PC: non rimuovere automaticamente, potrebbe essere un problema di rete/firewall
-        Write-Host ""
-        Write-Host "  +=============================================+" -ForegroundColor Red
-        Write-Host "  |   CASSA BLOCCATA DA ALTRO PC!             |" -ForegroundColor Red
-        Write-Host "  +=============================================+" -ForegroundColor Red
-        Write-Host ""
-        Write-Host "  Il PC '$($lock.hostname)' ha avviato la cassa" -ForegroundColor Yellow
-        Write-Host "  Avviato il: $($lock.avviato)" -ForegroundColor Yellow
-        Write-Host "  IP registrato: $($lock.ip):$($lock.port)" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "  Il server non risponde, ma potrebbe essere un problema di rete." -ForegroundColor DarkYellow
-        Write-Host "  Assicurati che la cassa sia chiusa su '$($lock.hostname)'" -ForegroundColor White
-        Write-Host "  prima di avviarla qui." -ForegroundColor White
-        Write-Host ""
-        Write-Host "  Se sei SICURO che la cassa e' spenta su quell'altro PC," -ForegroundColor White
-        $risposta = Read-Host "  digita FORZA e premi INVIO (oppure solo INVIO per uscire)"
-        if ($risposta.Trim().ToUpper() -ne "FORZA") { exit 0 }
-        LogWarn "Avvio forzato dall'utente: lock di '$($lock.hostname)' rimosso"
-        EliminaLock
+        # Lock da altro PC: controlla se è stantio (crash remoto)
+        $lockAge = $null
+        try {
+            $lockTime = [datetime]::ParseExact($lock.avviato, "dd/MM/yyyy HH:mm:ss", $null)
+            $lockAge = (Get-Date) - $lockTime
+        } catch { }
+
+        if ($lockAge -and $lockAge.TotalMinutes -gt 10) {
+            # Lock vecchio più di 10 minuti e server non risponde → crash remoto, rimuovi automaticamente
+            LogWarn "Lock di '$($lock.hostname)' vecchio di $([int]$lockAge.TotalMinutes) min e server non risponde - rimosso automaticamente"
+            EliminaLock
+        } else {
+            Write-Host ""
+            Write-Host "  +=============================================+" -ForegroundColor Red
+            Write-Host "  |   CASSA BLOCCATA DA ALTRO PC!             |" -ForegroundColor Red
+            Write-Host "  +=============================================+" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "  Il PC '$($lock.hostname)' ha avviato la cassa" -ForegroundColor Yellow
+            Write-Host "  Avviato il: $($lock.avviato)" -ForegroundColor Yellow
+            Write-Host "  IP registrato: $($lock.ip):$($lock.port)" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "  Il server non risponde, ma potrebbe essere un problema di rete." -ForegroundColor DarkYellow
+            Write-Host "  Assicurati che la cassa sia chiusa su '$($lock.hostname)'" -ForegroundColor White
+            Write-Host "  prima di avviarla qui." -ForegroundColor White
+            Write-Host ""
+            Write-Host "  Se sei SICURO che la cassa e' spenta su quell'altro PC," -ForegroundColor White
+            $risposta = Read-Host "  digita FORZA e premi INVIO (oppure solo INVIO per uscire)"
+            if ($risposta.Trim().ToUpper() -ne "FORZA") { exit 0 }
+            LogWarn "Avvio forzato dall'utente: lock di '$($lock.hostname)' rimosso"
+            EliminaLock
+        }
     } else {
         LogWarn "Lock file obsoleto (crash locale su questo PC) - rimozione e riavvio"
         EliminaLock
@@ -492,50 +504,24 @@ try {
     Log "Chiusura in corso..."
     if ($listener) { try { $listener.Stop() } catch { }; $listener = $null }
 
-    # Ferma PocketBase
-    if ($pbProc) {
+    # Ferma PocketBase in modo graceful (cosi' fa il WAL checkpoint da solo)
+    $pbExeProc = Get-Process "pocketbase" -EA SilentlyContinue | Select-Object -First 1
+    if ($pbExeProc) {
+        # CloseMainWindow invia WM_CLOSE — PocketBase lo gestisce e fa checkpoint WAL
+        $pbExeProc.CloseMainWindow() | Out-Null
+        $pbExeProc.WaitForExit(6000) | Out-Null
+        if (-not $pbExeProc.HasExited) {
+            Stop-Process -Id $pbExeProc.Id -Force -EA SilentlyContinue
+            LogWarn "PocketBase non ha risposto in tempo, terminato forzatamente"
+        } else {
+            LogOK "PocketBase chiuso (WAL checkpoint automatico)"
+        }
+    }
+    # Chiudi anche il processo cmd wrapper se ancora attivo
+    if ($pbProc -and -not $pbProc.HasExited) {
         Stop-Process -Id $pbProc.Id -Force -EA SilentlyContinue
     }
-    Get-Process -Name "pocketbase" -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
-    Start-Sleep -Seconds 2
-
-    # WAL checkpoint: unisce data.db-wal in data.db prima che Drive sincronizzi
-    # Usa winsqlite3.dll integrata in Windows 10+ (zero download)
-    # ROLLBACK: rimuovere il blocco try/catch sottostante
-    try {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public class WalCheckpoint {
-    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
-    public static extern int sqlite3_open(string filename, out IntPtr db);
-    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
-    public static extern int sqlite3_exec(IntPtr db, string sql, IntPtr cb, IntPtr arg, out IntPtr errmsg);
-    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
-    public static extern int sqlite3_close(IntPtr db);
-    [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)]
-    public static extern void sqlite3_free(IntPtr ptr);
-}
-'@ -EA Stop
-
-        foreach ($dbFile in @("data.db", "auxiliary.db")) {
-            $dbPath = Join-Path $PbData $dbFile
-            $walPath = "$dbPath-wal"
-            if ((Test-Path $dbPath) -and (Test-Path $walPath) -and (Get-Item $walPath).Length -gt 0) {
-                $db = [IntPtr]::Zero
-                $rc = [WalCheckpoint]::sqlite3_open($dbPath, [ref]$db)
-                if ($rc -eq 0) {
-                    $errmsg = [IntPtr]::Zero
-                    [WalCheckpoint]::sqlite3_exec($db, "PRAGMA wal_checkpoint(TRUNCATE);", [IntPtr]::Zero, [IntPtr]::Zero, [ref]$errmsg) | Out-Null
-                    if ($errmsg -ne [IntPtr]::Zero) { [WalCheckpoint]::sqlite3_free($errmsg) }
-                    [WalCheckpoint]::sqlite3_close($db) | Out-Null
-                    LogOK "WAL checkpoint: $dbFile pronto per sincronizzazione"
-                }
-            }
-        }
-    } catch {
-        LogWarn "WAL checkpoint non disponibile ($($_.Exception.Message)) - Drive sincronizzera' anche il file .wal"
-    }
+    Start-Sleep -Seconds 1
 
     EliminaLock
     LogOK "Cassa spenta"
