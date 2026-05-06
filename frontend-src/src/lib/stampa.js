@@ -53,7 +53,7 @@ function htmlScontrino(scontrino, righe, cfg) {
     : '<tr><th style="text-align:left">Prodotto</th><th>Qta</th><th style="text-align:right">Tot</th></tr>'
 
   return `
-    <div class="scontrino" style="width:${larghezza}mm;font-family:${fontFamily};font-size:${fontSize}px;">
+    <div class="scontrino" style="width:100%;box-sizing:border-box;font-family:${fontFamily};font-size:${fontSize}px;">
       ${mostraLogo ? `<div style="text-align:center;margin-bottom:6px"><img src="${cfg.logoUrl}" style="max-height:40px;max-width:${larghezza-10}mm"></div>` : ''}
       <div style="text-align:center;font-weight:bold;font-size:${fontSize+4}px">${nome}</div>
       ${ind ? `<div style="text-align:center">${ind}</div>` : ''}
@@ -104,7 +104,7 @@ function htmlComanda(nomeComanda, righe, scontrino, cfg) {
     </tr>`).join('')
 
   return `
-    <div class="comanda" style="width:${larghezza}mm;font-family:${fontFamily};">
+    <div class="comanda" style="width:100%;box-sizing:border-box;font-family:${fontFamily};">
       <div style="text-align:center;font-size:11px">${nome}</div>
       <div style="text-align:center;font-size:${fontSizeComanda+8}px;font-weight:900;border:3px solid #000;padding:4px;margin:4px 0;text-transform:uppercase">
         ${nomeComanda}
@@ -181,12 +181,15 @@ export function stampaTutto(scontrino, righeScontrino, comande, righePerComanda,
 
   if (sezioni.length === 0) return
 
+  const margine = config.marginePagina ?? 2
+  const larg = config.larghezza || 80
   const html = `
     <html><head><title>Stampa cassa</title>
     <style>
-      @page { margin: ${config.marginePagina || 2}mm; }
-      body { margin: 0; padding: 0; }
-      .scontrino, .comanda { page-break-after: always; padding: 4px; }
+      @page { size: ${larg}mm auto; margin: ${margine}mm; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 0; width: 100%; }
+      .scontrino, .comanda { page-break-after: always; width: 100%; }
       .scontrino:last-child, .comanda:last-child { page-break-after: avoid; }
       table { width: 100%; border-collapse: collapse; }
       td, th { padding: 1px 2px; }
@@ -202,13 +205,17 @@ export function stampaTutto(scontrino, righeScontrino, comande, righePerComanda,
 export function stampaScontrino(scontrino, righe, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
   if (config.stampaScontrino === false) return
-  const html = `<html><head><style>@page{margin:${config.marginePagina||2}mm}body{margin:0;padding:0}table{width:100%;border-collapse:collapse}</style></head><body>${htmlScontrino(scontrino, righe, config)}</body></html>`
+  const m = config.marginePagina ?? 2
+  const l = config.larghezza || 80
+  const html = `<html><head><style>@page{size:${l}mm auto;margin:${m}mm}*{box-sizing:border-box}body{margin:0;padding:0;width:100%}table{width:100%;border-collapse:collapse}</style></head><body>${htmlScontrino(scontrino, righe, config)}</body></html>`
   printViaIframe(html)
 }
 
 // Compat: stampa solo comanda
 export function stampaComanda(nomeComanda, righe, scontrino, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
-  const html = `<html><head><style>@page{margin:${config.marginePagina||2}mm}body{margin:0;padding:0}table{width:100%;border-collapse:collapse}</style></head><body>${htmlComanda(nomeComanda, righe, scontrino, config)}</body></html>`
+  const m = config.marginePagina ?? 2
+  const l = config.larghezza || 80
+  const html = `<html><head><style>@page{size:${l}mm auto;margin:${m}mm}*{box-sizing:border-box}body{margin:0;padding:0;width:100%}table{width:100%;border-collapse:collapse}</style></head><body>${htmlComanda(nomeComanda, righe, scontrino, config)}</body></html>`
   printViaIframe(html)
 }
