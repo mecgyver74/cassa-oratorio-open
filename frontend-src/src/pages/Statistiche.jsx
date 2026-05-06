@@ -274,9 +274,10 @@ export default function Statistiche({ utente }) {
     const wasFs = !!document.fullscreenElement
     const html = `<html><head><title>Statistiche ${titoloVista}</title>
       <style>
-        @page{size:80mm auto;margin:2mm}
+        @page{size:80mm auto;margin:0}
         *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;font-size:15px;margin:3mm;width:74mm}
+        html,body{margin:0;padding:0}
+        body{font-family:Arial,sans-serif;font-size:15px;padding:3mm;width:100%}
         h1{font-size:17px;margin:0 0 2px;text-align:center}
         .sub{font-size:12px;text-align:center;margin-bottom:6px;color:#555}
         hr{border:none;border-top:1px dashed #999;margin:6px 0}
@@ -291,7 +292,6 @@ export default function Statistiche({ utente }) {
         td{padding:3px 2px;border-bottom:1px dotted #ddd}
         td.r,th.r{text-align:right}
         tr.tot td{font-weight:bold;border-top:1px solid #999;border-bottom:none}
-        @media print{body{margin:0}}
       </style></head><body>
       <h1>Cassa Dalila</h1>
       <div class="sub">Statistiche · ${titoloVista}</div>

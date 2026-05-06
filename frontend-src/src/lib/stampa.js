@@ -188,7 +188,8 @@ export function stampaTutto(scontrino, righeScontrino, comande, righePerComanda,
     <style>
       @page { size: ${larg}mm auto; margin: 0; }
       * { box-sizing: border-box; }
-      body { margin: 0; padding: ${margine}mm; width: 100%; }
+      html, body { margin: 0; padding: 0; }
+      body { padding: ${margine}mm; width: 100%; }
       .scontrino, .comanda { page-break-after: always; width: 100%; }
       .scontrino:last-child, .comanda:last-child { page-break-after: avoid; }
       table { width: 100%; border-collapse: collapse; }
@@ -207,7 +208,7 @@ export function stampaScontrino(scontrino, righe, cfg = {}) {
   if (config.stampaScontrino === false) return
   const m = config.marginePagina ?? 2
   const l = config.larghezza || 80
-  const html = `<html><head><style>@page{size:${l}mm auto;margin:0}*{box-sizing:border-box}body{margin:0;padding:${m}mm;width:100%}table{width:100%;border-collapse:collapse}</style></head><body>${htmlScontrino(scontrino, righe, config)}</body></html>`
+  const html = `<html><head><style>@page{size:${l}mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}body{padding:${m}mm;width:100%}table{width:100%;border-collapse:collapse}</style></head><body>${htmlScontrino(scontrino, righe, config)}</body></html>`
   printViaIframe(html)
 }
 
@@ -216,6 +217,6 @@ export function stampaComanda(nomeComanda, righe, scontrino, cfg = {}) {
   const config = { ...getConfig(), ...cfg }
   const m = config.marginePagina ?? 2
   const l = config.larghezza || 80
-  const html = `<html><head><style>@page{size:${l}mm auto;margin:0}*{box-sizing:border-box}body{margin:0;padding:${m}mm;width:100%}table{width:100%;border-collapse:collapse}</style></head><body>${htmlComanda(nomeComanda, righe, scontrino, config)}</body></html>`
+  const html = `<html><head><style>@page{size:${l}mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}body{padding:${m}mm;width:100%}table{width:100%;border-collapse:collapse}</style></head><body>${htmlComanda(nomeComanda, righe, scontrino, config)}</body></html>`
   printViaIframe(html)
 }
