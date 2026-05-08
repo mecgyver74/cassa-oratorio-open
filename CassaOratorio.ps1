@@ -504,18 +504,11 @@ try {
     Log "Chiusura in corso..."
     if ($listener) { try { $listener.Stop() } catch { }; $listener = $null }
 
-    # Ferma PocketBase in modo graceful (cosi' fa il WAL checkpoint da solo)
+    # Ferma PocketBase
     $pbExeProc = Get-Process "pocketbase" -EA SilentlyContinue | Select-Object -First 1
     if ($pbExeProc) {
-        # CloseMainWindow invia WM_CLOSE — PocketBase lo gestisce e fa checkpoint WAL
-        $pbExeProc.CloseMainWindow() | Out-Null
-        $pbExeProc.WaitForExit(6000) | Out-Null
-        if (-not $pbExeProc.HasExited) {
-            Stop-Process -Id $pbExeProc.Id -Force -EA SilentlyContinue
-            LogWarn "PocketBase non ha risposto in tempo, terminato forzatamente"
-        } else {
-            LogOK "PocketBase chiuso (WAL checkpoint automatico)"
-        }
+        Stop-Process -Id $pbExeProc.Id -Force -EA SilentlyContinue
+        LogOK "PocketBase chiuso"
     }
     # Chiudi anche il processo cmd wrapper se ancora attivo
     if ($pbProc -and -not $pbProc.HasExited) {
