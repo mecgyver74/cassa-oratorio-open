@@ -409,7 +409,7 @@ Log "Avvio PocketBase..."
 $pbCmd = "`"$PbExe`" serve --http=0.0.0.0:$PB_PORT --dir=`"$PbData`" > pb_log.txt 2>&1"
 $pbProc = Start-Process -FilePath "cmd.exe" `
     -ArgumentList "/c", "title PocketBase Cassa && $pbCmd" `
-    -WorkingDirectory $AppDir -PassThru
+    -WorkingDirectory $AppDir -PassThru -WindowStyle Minimized
 
 Log "Attendo PocketBase..."
 if (-not (WaitPB 120)) {
@@ -497,7 +497,7 @@ try {
             $pbCmd2 = "`"$PbExe`" serve --http=0.0.0.0:$PB_PORT --dir=`"$PbData`""
             $pbProc = Start-Process -FilePath "cmd.exe" `
                 -ArgumentList "/c", "title PocketBase Cassa && $pbCmd2" `
-                -WorkingDirectory $AppDir -PassThru
+                -WorkingDirectory $AppDir -PassThru -WindowStyle Minimized
         }
     }
 } finally {
