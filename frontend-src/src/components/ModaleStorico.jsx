@@ -129,6 +129,16 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
     } catch(e) { toast('Errore: ' + e.message, 'r') }
   }
 
+  const handleCambiaPagamento = async (nuovoPagamento) => {
+    try {
+      await pb.collection('scontrini').update(sel.id, { tipo_pagamento: nuovoPagamento })
+      const updated = await pb.collection('scontrini').getOne(sel.id)
+      setSel(updated)
+      caricaScontrini()
+      toast('Tipo pagamento aggiornato', 'b')
+    } catch(e) { toast('Errore: ' + e.message, 'r') }
+  }
+
   const handleApplicaSconto = async () => {
     if (!sel || sel.stornato) return
     const v = parseFloat(scontoVal) || 0
@@ -261,7 +271,17 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
                         Sconto: {sel.sconto_euro > 0 ? '- ' + EUR(sel.sconto_euro) : sel.sconto_perc + '%'}
                       </div>
                     )}
-                    <div style={{ fontSize: 12, color: 'var(--text2)', textTransform: 'capitalize' }}>{sel.tipo_pagamento}</div>
+                    {!sel.stornato ? (
+                      <select value={sel.tipo_pagamento} onChange={e => handleCambiaPagamento(e.target.value)}
+                        style={{ marginTop: 4, background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 7px', fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>
+                        <option value="contanti">Contanti</option>
+                        <option value="carta">Carta</option>
+                        <option value="satispay">Satispay</option>
+                        <option value="omaggio">Omaggio</option>
+                      </select>
+                    ) : (
+                      <div style={{ fontSize: 12, color: 'var(--text2)', textTransform: 'capitalize' }}>{sel.tipo_pagamento}</div>
+                    )}
                   </div>
                 </div>
 
