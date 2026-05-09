@@ -101,12 +101,14 @@ export default function ComandeDisplay() {
 
       let tutteLeRighe = []
       if (sc.length > 0) {
-        const scIdSet = new Set(sc.map(s => s.id))
-        const righe = await pb.collection('righe_scontrino').getFullList({
-          filter: `stornata=false && created >= '${oggi} 00:00:00'`,
-          expand: 'prodotto'
-        })
-        tutteLeRighe = righe.filter(r => scIdSet.has(r.scontrino))
+        const BATCH = 30
+        const batches = []
+        for (let i = 0; i < sc.length; i += BATCH) batches.push(sc.slice(i, i + BATCH))
+        const results = await Promise.all(batches.map(batch => {
+          const f = `(${batch.map(s => `scontrino="${s.id}"`).join(' || ')}) && stornata=false`
+          return pb.collection('righe_scontrino').getFullList({ filter: f, expand: 'prodotto' })
+        }))
+        tutteLeRighe = results.flat()
       }
 
       pb.autoCancellation(true)
