@@ -90,7 +90,7 @@ export default function ComandeDisplay() {
 
       const oggi = new Date().toISOString().slice(0, 10)
       const [sc, com, evaseList, pronteList] = await Promise.all([
-        pb.collection('scontrini').getFullList({ filter: `stornato=false && (sessione="" || sessione=null) && data_ora >= '${oggi} 00:00:00'`, sort: '-data_ora' }),
+        pb.collection('scontrini').getFullList({ filter: `stornato=false && (sessione="" || sessione=null)`, sort: '-data_ora' }),
         pb.collection('comande').getFullList({ sort: 'ordine,nome', filter: 'abilitata=true' }),
         pb.collection('comande_evase').getFullList().catch(() => []),
         pb.collection('righe_pronte').getFullList().catch(() => null),
@@ -101,10 +101,12 @@ export default function ComandeDisplay() {
 
       let tutteLeRighe = []
       if (sc.length > 0) {
-        const scIds = sc.map(s => `scontrino="${s.id}"`).join(' || ')
-        tutteLeRighe = await pb.collection('righe_scontrino').getFullList({
-          filter: `(${scIds}) && stornata=false`, expand: 'prodotto'
+        const scIdSet = new Set(sc.map(s => s.id))
+        const righe = await pb.collection('righe_scontrino').getFullList({
+          filter: `stornata=false && created >= '${oggi} 00:00:00'`,
+          expand: 'prodotto'
         })
+        tutteLeRighe = righe.filter(r => scIdSet.has(r.scontrino))
       }
 
       pb.autoCancellation(true)
