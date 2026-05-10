@@ -13,10 +13,11 @@ const MONETE = [
   { v: 0.05, label: '5c' },
 ]
 
-export default function ModalePagamento({ totale, onConferma, onAnnulla }) {
+export default function ModalePagamento({ totale, tavoloInitial = '', onConferma, onAnnulla }) {
   const [tipo, setTipo] = useState('contanti')
   const [npStr, setNpStr] = useState('')
   const [tagli, setTagli] = useState([])
+  const [tavoloStr, setTavoloStr] = useState(tavoloInitial)
 
   const sommaTagli = tagli.reduce((s, v) => s + v, 0)
   const haTagli = tagli.length > 0
@@ -57,7 +58,7 @@ export default function ModalePagamento({ totale, onConferma, onAnnulla }) {
 
   const handleConferma = () => {
     const pagato = pagatoEsatto ? totale : ric
-    onConferma({ tipoPagamento: tipo, pagato })
+    onConferma({ tipoPagamento: tipo, pagato, tavoloStr: tavoloStr.trim() })
   }
 
   const taglioBtnStyle = {
@@ -164,6 +165,18 @@ export default function ModalePagamento({ totale, onConferma, onAnnulla }) {
             }
           </div>
         )}
+
+        <div style={{ marginTop: 10, marginBottom: 4 }}>
+          <label style={{ fontSize: 12, color: 'var(--text2)', display: 'block', marginBottom: 4, fontWeight: 600 }}>
+            Tavolo / Nome cliente <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(opzionale)</span>
+          </label>
+          <input
+            value={tavoloStr}
+            onChange={e => setTavoloStr(e.target.value)}
+            placeholder="Es: 5 o Mario"
+            style={{ width: '100%', background: 'var(--surf2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', fontSize: 14, color: 'var(--text)', boxSizing: 'border-box' }}
+          />
+        </div>
 
         <div className="modal-btns">
           <button className="modal-btn-annulla" onClick={onAnnulla}>Annulla</button>

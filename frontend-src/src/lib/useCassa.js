@@ -110,12 +110,17 @@ export function useCassa() {
     setRighe([]); setScontoPerc(0); setScontoEuro(0); setTavolo(null); setNote('')
   }, [])
 
-  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente, asporto }) => {
+  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente, asporto, tavoloStr }) => {
     setLoading(true)
     pb.autoCancellation(false)
     try {
       const totale = getTotale()
       const sub = getSub()
+
+      // tavoloStr dal modale pagamento sovrascrive il tavolo impostato nell'header
+      const tavoloEffettivo = tavoloStr !== undefined
+        ? (tavoloStr ? { id: null, numero: tavoloStr } : null)
+        : tavolo
 
       // Prossimo numero scontrino — conta solo quelli della sessione corrente (sessione="")
       const ultimi = await pb.collection('scontrini').getList(1, 1, {
@@ -129,7 +134,7 @@ export function useCassa() {
         data_ora: new Date().toISOString(),
         operatore: utente?.id || null,
         postazione: utente?.nome || utente?.postazione || 'Cassa',
-        tavolo: tavolo?.id || null,
+        tavolo: tavoloEffettivo?.id || null,
         sessione: '',       // esplicito: garantisce sessione="" per il filtro sessione corrente
         note,
         totale_lordo: Math.max(0, sub || 0),
@@ -198,7 +203,7 @@ export function useCassa() {
         const { getConfig } = await import('./stampa')
         const cfg = getConfig()
         const comande = await pb.collection('comande').getFullList({ filter: 'abilitata=true', sort: 'ordine,nome' })
-        const scForPrint = { ...sc, tavolo: tavolo?.numero || null }
+        const scForPrint = { ...sc, tavolo: tavoloEffettivo?.numero || null }
 
         // Costruisci mappa righe per comanda usando le righe del carrello (hanno _famId)
         const righePerComanda = {}

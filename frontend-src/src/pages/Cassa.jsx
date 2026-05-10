@@ -568,6 +568,7 @@ export default function Cassa({ utente }) {
       {pagOpen && (
         <ModalePagamento
           totale={totale}
+          tavoloInitial={cassa.tavolo?.numero || ''}
           onConferma={handlePaga}
           onAnnulla={() => setPagOpen(false)}
         />

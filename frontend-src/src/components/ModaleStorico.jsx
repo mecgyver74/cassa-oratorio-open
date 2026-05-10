@@ -14,6 +14,7 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
   const [scontoVal, setScontoVal] = useState('')
   const [scontoTipo, setScontoTipo] = useState('euro')
   const [loadingRighe, setLoadingRighe] = useState(false)
+  const [ristampaTavolo, setRistampaTavolo] = useState('')
 
   useEffect(() => { caricaScontrini() }, [])
 
@@ -32,6 +33,7 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
   const selScontrino = async sc => {
     setSel(sc)
     setRighe([])
+    setRistampaTavolo('')
     setLoadingRighe(true)
     try {
       pb.autoCancellation(false)
@@ -157,11 +159,11 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
     } catch(e) { toast('Errore: ' + e.message, 'r') }
   }
 
-  const ristampa = async (scontrino, righeScontrino) => {
+  const ristampa = async (scontrino, righeScontrino, tavoloNum) => {
     try {
       const cfg = getConfig()
       const comande = await pb.collection('comande').getFullList({ filter: 'abilitata=true', sort: 'ordine,nome' })
-      const scForPrint = { ...scontrino, tavolo: scontrino.tavolo?.numero || null }
+      const scForPrint = { ...scontrino, tavolo: tavoloNum || scontrino.tavolo?.numero || null }
 
       // Recupera famiglie per i prodotti nelle righe
       const prodIds = righeScontrino.filter(r => r.prodotto).map(r => r.prodotto)
@@ -363,11 +365,17 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
                       </button>
                     </div>
                     <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14, marginBottom: 10, color: 'var(--blue)' }}>Ristampa</div>
-                      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5, flex: 1 }}>
-                        Ristampa lo scontrino e le comande con i dati attuali.
-                      </div>
-                      <button onClick={async () => { if (righe.length === 0) { toast('Nessuna riga caricata', 'r'); return } await ristampa(sel, righe); toast('Ristampa avviata', 'b') }}
+                      <div style={{ fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14, marginBottom: 8, color: 'var(--blue)' }}>Ristampa</div>
+                      <label style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 600, marginBottom: 3 }}>
+                        Tavolo / Nome <span style={{ fontWeight: 400 }}>(opzionale)</span>
+                      </label>
+                      <input
+                        value={ristampaTavolo}
+                        onChange={e => setRistampaTavolo(e.target.value)}
+                        placeholder="Es: 5 o Mario"
+                        style={{ background: '#fff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '5px 8px', fontSize: 13, color: '#1e293b', marginBottom: 8, width: '100%', boxSizing: 'border-box' }}
+                      />
+                      <button onClick={async () => { if (righe.length === 0) { toast('Nessuna riga caricata', 'r'); return } await ristampa(sel, righe, ristampaTavolo.trim()); toast('Ristampa avviata', 'b') }}
                         style={{ width: '100%', padding: 9, background: 'var(--blue)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                         🖨 Ristampa
                       </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useToast } from '../components/Toast'
 import ModaleChiusuraCassa from '../components/ModaleChiusuraCassa'
 import pb from '../lib/pb'
@@ -23,7 +23,8 @@ export default function Statistiche({ utente }) {
 
   // ── Dati ─────────────────────────────────────────────────────
   const [scontrini, setScontrini] = useState([])
-  const [venduto,   setVenduto]   = useState([])
+  const [righeRaw,  setRigheRaw]  = useState([])
+  const [filtroPagamento, setFiltroPagamento] = useState('tutti')
   const [loading,   setLoading]   = useState(false)
   const [eliminando, setEliminando] = useState(false)
 
@@ -66,27 +67,39 @@ export default function Statistiche({ utente }) {
         })
       ])
       setScontrini(sc)
-      const mappa = {}
-      righe.forEach(r => {
-        if (r.expand?.scontrino?.stornato || r.stornata) return
-        const k = r.nome_snapshot
-        if (!mappa[k]) mappa[k] = { nome: k, qta: 0, tot: 0, omaggi: 0 }
-        if (r.omaggio || r.expand?.scontrino?.tipo_pagamento === 'omaggio') mappa[k].omaggi += r.quantita
-        else { mappa[k].qta += r.quantita; mappa[k].tot += r.totale_riga }
-      })
-      setVenduto(Object.values(mappa).sort((a, b) => b.tot - a.tot))
+      setRigheRaw(righe)
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [buildFilter, buildRigheFilter])
 
   useEffect(() => { carica() }, [carica])
 
+  // ── Filtro pagamento — deriva sottoinsieme di scontrini ──────
+  const scontriniVista = useMemo(() =>
+    filtroPagamento === 'tutti' ? scontrini : scontrini.filter(s => s.tipo_pagamento === filtroPagamento),
+    [scontrini, filtroPagamento]
+  )
+
+  const venduto = useMemo(() => {
+    const scIds = filtroPagamento !== 'tutti' ? new Set(scontriniVista.map(s => s.id)) : null
+    const mappa = {}
+    righeRaw.forEach(r => {
+      if (r.expand?.scontrino?.stornato || r.stornata) return
+      if (scIds !== null && !scIds.has(r.scontrino)) return
+      const k = r.nome_snapshot
+      if (!mappa[k]) mappa[k] = { nome: k, qta: 0, tot: 0, omaggi: 0 }
+      if (r.omaggio || r.expand?.scontrino?.tipo_pagamento === 'omaggio') mappa[k].omaggi += r.quantita
+      else { mappa[k].qta += r.quantita; mappa[k].tot += r.totale_riga }
+    })
+    return Object.values(mappa).sort((a, b) => b.tot - a.tot)
+  }, [righeRaw, filtroPagamento, scontriniVista])
+
   // ── Calcoli ──────────────────────────────────────────────────
-  const validi         = scontrini.filter(s => !s.stornato)
+  const validi         = scontriniVista.filter(s => !s.stornato)
   const incasso        = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
   const incassoLordo   = validi.reduce((s, x) => s + (x.totale_lordo || 0), 0)
   const scontiTot      = incassoLordo - incasso
-  const stornati       = scontrini.filter(s => s.stornato).length
+  const stornati       = scontriniVista.filter(s => s.stornato).length
   const incassoContanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.totale_netto || 0), 0)
   const incassoCarta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.totale_netto || 0), 0)
   const incassoSatispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.totale_netto || 0), 0)
@@ -338,7 +351,7 @@ export default function Statistiche({ utente }) {
     XLSX.utils.book_append_sheet(wb, ws1, 'Venduto')
     const ws2 = XLSX.utils.aoa_to_sheet([
       ['Numero','Data','Lordo EUR','Sconto EUR','Netto EUR','Pagamento','Stornato','Postazione'],
-      ...scontrini.map(s => [
+      ...scontriniVista.map(s => [
         parseInt(s.numero), new Date(s.data_ora).toLocaleString('it-IT'),
         parseFloat((s.totale_lordo||0).toFixed(2)), parseFloat((s.sconto_euro||0).toFixed(2)),
         parseFloat((s.totale_netto||0).toFixed(2)), s.tipo_pagamento,
@@ -462,6 +475,20 @@ export default function Statistiche({ utente }) {
         </div>
       )}
 
+      {/* Filtro tipo pagamento */}
+      <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:10, flexWrap:'wrap' }}>
+        <span style={{ fontSize:11, color:'var(--text3)', fontWeight:600, marginRight:2 }}>Pagamento:</span>
+        {[['tutti','Tutti'],['contanti','Contanti'],['carta','Carta'],['satispay','Satispay'],['omaggio','Omaggio']].map(([k,l]) => (
+          <button key={k} onClick={() => setFiltroPagamento(k)} style={{
+            padding:'3px 11px', borderRadius:6,
+            border:`1px solid ${filtroPagamento===k?'var(--accent)':'var(--border)'}`,
+            background: filtroPagamento===k?'var(--accent)':'var(--surf2)',
+            color: filtroPagamento===k?'#fff':'var(--text2)',
+            fontSize:12, fontWeight:600, cursor:'pointer'
+          }}>{l}</button>
+        ))}
+      </div>
+
       {/* Info sessione archivio */}
       {vista === 'sessione' && sessVista && (
         <div style={{ background:'var(--surf2)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 16px', marginBottom:14, fontSize:13, color:'var(--text2)', display:'flex', gap:24, flexWrap:'wrap' }}>
@@ -552,7 +579,7 @@ export default function Statistiche({ utente }) {
             </tr>
           </thead>
           <tbody>
-            {scontrini.map(s => (
+            {scontriniVista.map(s => (
               <tr key={s.id} style={{ opacity: s.stornato ? .55 : 1 }}>
                 <td style={{ fontWeight:700, fontFamily:'Barlow Condensed' }}>#{String(s.numero).padStart(4,'0')}</td>
                 <td>{new Date(s.data_ora).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
@@ -564,7 +591,7 @@ export default function Statistiche({ utente }) {
                 <td><span className={`badge ${s.stornato?'badge-storno':'badge-ok'}`}>{s.stornato?'Stornato':'OK'}</span></td>
               </tr>
             ))}
-            {!scontrini.length && <tr><td colSpan={8} style={{ color:'var(--text3)', textAlign:'center', padding:20 }}>Nessuno scontrino</td></tr>}
+            {!scontriniVista.length && <tr><td colSpan={8} style={{ color:'var(--text3)', textAlign:'center', padding:20 }}>Nessuno scontrino</td></tr>}
           </tbody>
         </table>
       </div>
