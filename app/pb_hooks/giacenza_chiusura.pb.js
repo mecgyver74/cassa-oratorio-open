@@ -226,6 +226,12 @@ onRecordAfterCreateSuccess(function(e) {
         }
         try { $os.writeFile(dir+"/email_log.txt", emailLog, 0o644) } catch(_) {}
 
+        // Svuota i log delle richieste HTTP e compatta auxiliary.db
+        try {
+            $app.auxDB().newQuery("DELETE FROM _requests").execute()
+            $app.auxVacuum()
+        } catch(_) {}
+
     } catch(_) {}
 
 }, "sessioni_cassa")
