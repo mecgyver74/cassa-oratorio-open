@@ -71,7 +71,7 @@ export default function Statistiche({ utente }) {
         if (r.expand?.scontrino?.stornato || r.stornata) return
         const k = r.nome_snapshot
         if (!mappa[k]) mappa[k] = { nome: k, qta: 0, tot: 0, omaggi: 0 }
-        if (r.omaggio) mappa[k].omaggi += r.quantita
+        if (r.omaggio || r.expand?.scontrino?.tipo_pagamento === 'omaggio') mappa[k].omaggi += r.quantita
         else { mappa[k].qta += r.quantita; mappa[k].tot += r.totale_riga }
       })
       setVenduto(Object.values(mappa).sort((a, b) => b.tot - a.tot))
