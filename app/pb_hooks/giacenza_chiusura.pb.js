@@ -43,10 +43,11 @@ onRecordAfterCreateSuccess(function(e) {
 
         // Dati riepilogo sessione
         var scCount   = sess.getInt("scontrini_count")
-        var totNetto  = sess.getFloat("totale_netto")
-        var totCont   = sess.getFloat("totale_contanti")
-        var totCarta  = sess.getFloat("totale_carta")
-        var totOmaggi = sess.getFloat("totale_omaggi")
+        var totNetto    = sess.getFloat("totale_netto")
+        var totCont     = sess.getFloat("totale_contanti")
+        var totCarta    = sess.getFloat("totale_carta")
+        var totSatispay = sess.getFloat("totale_satispay")
+        var totOmaggi   = sess.getFloat("totale_omaggi")
         var primoN    = sess.getInt("primo_numero")
         var ultimoN   = sess.getInt("ultimo_numero")
         var apertaIl  = sess.getString("aperta_il")
@@ -64,11 +65,14 @@ onRecordAfterCreateSuccess(function(e) {
             var righe = $app.findRecordsByFilter("righe_scontrino",
                 "scontrino.sessione='' && scontrino.stornato=false && stornata=false",
                 "nome_snapshot", 0, 0)
+            $app.expandRecords(righe, ["scontrino"], null)
             for (var i=0; i<righe.length; i++) {
                 var r = righe[i]
                 var k = r.getString("nome_snapshot")
                 if (!vendutoMap[k]) { vendutoMap[k] = {nome:k, qta:0, omaggi:0, tot:0}; vendutoOrder.push(k) }
-                if (r.getBool("omaggio")) vendutoMap[k].omaggi += r.getInt("quantita")
+                var scOmaggio = false
+                try { scOmaggio = r.expandedOne("scontrino").getString("tipo_pagamento") === "omaggio" } catch(_) {}
+                if (r.getBool("omaggio") || scOmaggio) vendutoMap[k].omaggi += r.getInt("quantita")
                 else { vendutoMap[k].qta += r.getInt("quantita"); vendutoMap[k].tot += r.getFloat("totale_riga") }
             }
             vendutoOrder.sort(function(a,b){ return vendutoMap[b].tot - vendutoMap[a].tot })
@@ -85,6 +89,7 @@ onRecordAfterCreateSuccess(function(e) {
         csv.push('"Totale netto","'+eur(totNetto)+'"')
         csv.push('"Contanti","'+eur(totCont)+'"')
         csv.push('"Carta","'+eur(totCarta)+'"')
+        if (totSatispay > 0) csv.push('"Satispay","'+eur(totSatispay)+'"')
         csv.push('"Omaggi","'+eur(totOmaggi)+'"')
         csv.push("")
         csv.push("Venduto per prodotto")
@@ -145,6 +150,7 @@ onRecordAfterCreateSuccess(function(e) {
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Totale netto</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#16a34a">'+eur(totNetto)+'</td></tr>' +
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui contanti</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totCont)+'</td></tr>' +
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui carta</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totCarta)+'</td></tr>' +
+            (totSatispay > 0 ? '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui Satispay</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totSatispay)+'</td></tr>' : '') +
             '<tr><td style="padding:5px 10px;color:#475569">di cui omaggi</td><td style="padding:5px 10px;font-weight:700">'+eur(totOmaggi)+'</td></tr>' +
             '</table>'
 
