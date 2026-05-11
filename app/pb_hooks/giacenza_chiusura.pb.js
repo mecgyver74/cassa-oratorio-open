@@ -211,12 +211,19 @@ onRecordAfterCreateSuccess(function(e) {
             try {
                 var to = []
                 for (var i=0; i<dest.length; i++) to.push({ address: dest[i] })
+                var csvPath = dir+"/giacenza_"+nomeFile+".csv"
+                var attachments = {}
+                try {
+                    attachments["chiusura_"+nomeFile+".csv"] = $os.readFile(csvPath)
+                    emailLog += "allegato CSV ok\n"
+                } catch(errAtt) { emailLog += "allegato CSV fallito: " + String(errAtt) + "\n" }
                 var msg = new MailerMessage({
                     from:    { address: sender, name: $app.settings().meta.senderName || "Cassa Dalila" },
                     to:      to,
                     subject: "Chiusura cassa \u2014 Sessione #" + numSess + ": " + nome,
                     html:    html,
                     text:    csvContent,
+                    attachments: attachments,
                 })
                 $app.newMailClient().send(msg)
                 emailLog += "email inviata OK\n"
