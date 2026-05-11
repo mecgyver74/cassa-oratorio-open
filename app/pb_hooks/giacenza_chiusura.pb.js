@@ -177,12 +177,71 @@ onRecordAfterCreateSuccess(function(e) {
             '<div class="tot">Totale pezzi (escluso \u221E): '+tot+'</div>' +
             '</body></html>'
 
+        // Excel (SpreadsheetML) — aperto nativamente da Excel come file .xls multi-foglio
+        var xS = function(s, bold) {
+            var v = String(s==null?'':s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            return '<Cell'+(bold?' ss:StyleID="B"':'')+'>'+
+                '<Data ss:Type="String">'+v+'</Data></Cell>'
+        }
+        var xN = function(n, bold) {
+            return '<Cell'+(bold?' ss:StyleID="B"':'')+'>'+
+                '<Data ss:Type="Number">'+(isNaN(Number(n))?0:Number(n))+'</Data></Cell>'
+        }
+        var xR = function(cells) { return '<Row>'+cells+'</Row>' }
+
+        var xlsR1 = ''  // Riepilogo
+        xlsR1 += xR(xS('Sessione #'+numSess,true)+xS(nome))
+        xlsR1 += xR(xS('Aperta il')+xS(fmtData(apertaIl)))
+        xlsR1 += xR(xS('Chiusa il')+xS(fmtData(chiusaIl)))
+        xlsR1 += xR(xS('Scontrini emessi')+xN(scCount))
+        xlsR1 += xR(xS('Dal numero')+xN(primoN))
+        xlsR1 += xR(xS('Al numero')+xN(ultimoN))
+        xlsR1 += xR(xS('')+xS(''))
+        xlsR1 += xR(xS('Totale netto',true)+xN(totNetto,true))
+        xlsR1 += xR(xS('Contanti')+xN(totCont))
+        xlsR1 += xR(xS('Carta')+xN(totCarta))
+        if (totSatispay > 0) xlsR1 += xR(xS('Satispay')+xN(totSatispay))
+        xlsR1 += xR(xS('Omaggi')+xN(totOmaggi))
+
+        var xlsR2 = ''  // Venduto per prodotto
+        xlsR2 += xR(xS('Prodotto',true)+xS('Qtà tot.',true)+xS('di cui omaggi',true)+xS('Qtà pagata',true)+xS('Totale €',true))
+        for (var i=0; i<vendutoOrder.length; i++) {
+            var v = vendutoMap[vendutoOrder[i]]
+            xlsR2 += xR(xS(v.nome)+xN(v.qta+v.omaggi)+xN(v.omaggi)+xN(v.qta)+xN(v.tot))
+        }
+        xlsR2 += xR(xS('TOTALE',true)+xN(totVqta,true)+xN(totVomaggi,true)+xN(totVpagata,true)+xN(totNetto,true))
+
+        var xlsR3 = ''  // Magazzino
+        xlsR3 += xR(xS('Sezione',true)+xS('Articolo',true)+xS('Giacenza',true))
+        for (var i=0; i<mc.length; i++) {
+            var q=mc[i].getInt("quantita")
+            xlsR3 += xR(xS('Magazzino comune')+xS(mc[i].getString("nome"))+(q<0?xS('∞'):xN(q)))
+        }
+        for (var f=0; f<famOrder.length; f++) {
+            var g=gruppi[famOrder[f]]
+            for (var j=0; j<g.length; j++) {
+                var q=g[j].getInt("quantita")
+                xlsR3 += xR(xS(famOrder[f])+xS(g[j].getString("nome"))+(q<0?xS('∞'):xN(q)))
+            }
+        }
+
+        var xlsContent =
+            '<?xml version="1.0" encoding="UTF-8"?>\n'+
+            '<?mso-application progid="Excel.Sheet"?>\n'+
+            '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'+
+            '<Styles><Style ss:ID="B"><Font ss:Bold="1"/></Style></Styles>\n'+
+            '<Worksheet ss:Name="Riepilogo"><Table>'+xlsR1+'</Table></Worksheet>\n'+
+            '<Worksheet ss:Name="Venduto"><Table>'+xlsR2+'</Table></Worksheet>\n'+
+            '<Worksheet ss:Name="Magazzino"><Table>'+xlsR3+'</Table></Worksheet>\n'+
+            '</Workbook>'
+
         // Salva file
         var dir      = $app.dataDir() + "/../../chiusure"
         var nomeFile = nome.replace(/[\\/:*?"<>|]/g,"_").replace(/\s+/g,"_")
         try { $os.mkdirAll(dir, 0o755) } catch(_) {}
         try { $os.writeFile(dir+"/giacenza_"+nomeFile+".csv",  csvContent, 0o644) } catch(_) {}
         try { $os.writeFile(dir+"/giacenza_"+nomeFile+".html", html,       0o644) } catch(_) {}
+        try { $os.writeFile(dir+"/giacenza_"+nomeFile+".xls",  xlsContent, 0o644) } catch(_) {}
 
         // Email
         var emailLog = ""
@@ -211,12 +270,12 @@ onRecordAfterCreateSuccess(function(e) {
             try {
                 var to = []
                 for (var i=0; i<dest.length; i++) to.push({ address: dest[i] })
-                var csvPath = dir+"/giacenza_"+nomeFile+".csv"
+                var xlsPath = dir+"/giacenza_"+nomeFile+".xls"
                 var attachments = {}
                 try {
-                    attachments["chiusura_"+nomeFile+".csv"] = $os.readFile(csvPath)
-                    emailLog += "allegato CSV ok\n"
-                } catch(errAtt) { emailLog += "allegato CSV fallito: " + String(errAtt) + "\n" }
+                    attachments["chiusura_"+nomeFile+".xls"] = $os.readFile(xlsPath)
+                    emailLog += "allegato XLS ok\n"
+                } catch(errAtt) { emailLog += "allegato XLS fallito: " + String(errAtt) + "\n" }
                 var msg = new MailerMessage({
                     from:    { address: sender, name: $app.settings().meta.senderName || "Cassa Dalila" },
                     to:      to,
