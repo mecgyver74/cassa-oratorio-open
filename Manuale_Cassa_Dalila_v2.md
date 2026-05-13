@@ -1,5 +1,6 @@
 # CASSA DALILA
-## Sistema di cassa per oratori — MANUALE UTENTE
+## Sistema di cassa per oratori
+## MANUALE UTENTE
 ### Guida completa all'installazione e all'utilizzo
 **Versione 1.4 | 2026**
 
