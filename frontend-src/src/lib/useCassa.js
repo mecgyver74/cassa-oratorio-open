@@ -110,7 +110,7 @@ export function useCassa() {
     setRighe([]); setScontoPerc(0); setScontoEuro(0); setTavolo(null); setNote('')
   }, [])
 
-  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente, asporto, tavoloStr }) => {
+  const pagaeSalva = useCallback(async ({ tipoPagamento, pagato, utente, asporto, tavoloStr, buonoVolontarioId, importoBuono }) => {
     setLoading(true)
     pb.autoCancellation(false)
     try {
@@ -146,6 +146,8 @@ export function useCassa() {
         resto: Math.max(0, (pagato || totale || 0) - (totale || 0)),
         stornato: false,
         asporto: asporto || false,
+        buono_volontario: buonoVolontarioId || null,
+        importo_buono: Math.max(0, importoBuono || 0),
       })
 
       // Crea righe

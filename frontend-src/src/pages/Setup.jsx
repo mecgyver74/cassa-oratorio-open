@@ -12,7 +12,7 @@ export default function Setup() {
     <div className="page-pad">
       <div className="page-title">⚙️ Setup</div>
       <div className="prodotti-tabs" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', display: 'inline-flex' }}>
-        {[['prodotti','Prodotti'],['famiglie','Famiglie'],['magcomuni','Magazzini comuni'],['comande','Comande'],['menu','Menù'],['utenti','Utenti'],['display','Aspetto'],['notifiche','Notifiche']].map(([k,l]) => (
+        {[['prodotti','Prodotti'],['famiglie','Famiglie'],['magcomuni','Magazzini comuni'],['comande','Comande'],['menu','Menù'],['utenti','Utenti'],['volontari','Volontari'],['display','Aspetto'],['notifiche','Notifiche']].map(([k,l]) => (
           <button key={k} className={`prodotti-tab ${tab===k?'active':''}`} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -22,6 +22,7 @@ export default function Setup() {
       {tab === 'comande' && <TabComande toast={toast} />}
       {tab === 'menu' && <TabMenu toast={toast} />}
       {tab === 'utenti' && <TabUtenti toast={toast} />}
+      {tab === 'volontari' && <TabVolontari toast={toast} />}
       {tab === 'display' && <TabDisplay toast={toast} />}
       {tab === 'notifiche' && <TabNotifiche toast={toast} />}
     </div>
@@ -707,6 +708,95 @@ function TabNotifiche({ toast }) {
             Salva destinatari
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── TAB VOLONTARI ─────────────────────────────────────────────────────────────
+function TabVolontari({ toast }) {
+  const [lista, setLista] = useState([])
+  const [sel, setSel] = useState(null)
+  const [form, setForm] = useState({ nome: '', valore_buono: '', note: '' })
+
+  const EUR = v => '€ ' + Number(v).toFixed(2).replace('.', ',')
+
+  const carica = useCallback(async () => {
+    setLista(await pb.collection('volontari').getFullList({ sort: 'nome' }))
+  }, [])
+  useEffect(() => { carica() }, [carica])
+
+  const selVol = (v) => {
+    setSel(v.id)
+    setForm({ nome: v.nome, valore_buono: v.valore_buono, note: v.note || '' })
+  }
+
+  const nuovo = () => {
+    setSel('new')
+    setForm({ nome: '', valore_buono: '', note: '' })
+  }
+
+  const salva = async () => {
+    const nome = form.nome.trim()
+    if (!nome) { toast('Nome obbligatorio', 'r'); return }
+    try {
+      const data = { nome, valore_buono: parseFloat(form.valore_buono) || 0, note: form.note || '' }
+      if (sel === 'new') await pb.collection('volontari').create(data)
+      else await pb.collection('volontari').update(sel, data)
+      toast('Salvato', 'v'); carica(); setSel(null)
+    } catch(e) { toast('Errore: ' + e.message, 'r') }
+  }
+
+  const elimina = async (id) => {
+    if (!fsConfirm('Eliminare questo volontario?')) return
+    try {
+      await pb.collection('volontari').delete(id)
+      toast('Eliminato', 'v'); carica(); if (sel === id) setSel(null)
+    } catch(e) { toast('Errore: ' + e.message, 'r') }
+  }
+
+  return (
+    <div className="setup-cols">
+      <div className="setup-box">
+        <div className="setup-box-head">
+          <h3>Volontari ({lista.length})</h3>
+          <button className="btn-add" onClick={nuovo}>+ Nuovo</button>
+        </div>
+        <div className="setup-list">
+          {lista.map(v => (
+            <div key={v.id} className={`setup-li ${sel === v.id ? 'sel' : ''}`} onClick={() => selVol(v)}>
+              <span style={{ flex: 1 }}>{v.nome}</span>
+              <span style={{ fontSize: 12, color: 'var(--text3)', marginRight: 8 }}>{EUR(v.valore_buono)}</span>
+              <span className="setup-li-del" onClick={e => { e.stopPropagation(); elimina(v.id) }}>✕</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="setup-box">
+        {sel ? (
+          <div className="setup-form">
+            <div className="fg">
+              <label>Nome e cognome *</label>
+              <input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Es. Mario Rossi" />
+            </div>
+            <div className="fg">
+              <label>Valore buono (€)</label>
+              <input type="number" step="0.5" min="0" value={form.valore_buono}
+                onChange={e => setForm(f => ({ ...f, valore_buono: e.target.value }))}
+                placeholder="Es. 15" />
+            </div>
+            <div className="fg">
+              <label>Note (opzionale)</label>
+              <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+                placeholder="Es. buono speciale serata" />
+            </div>
+            <button className="btn-salva" onClick={salva}>Salva</button>
+          </div>
+        ) : (
+          <div style={{ padding: 20, color: 'var(--text3)', fontSize: 13 }}>
+            ← Seleziona un volontario per modificarlo
+          </div>
+        )}
       </div>
     </div>
   )

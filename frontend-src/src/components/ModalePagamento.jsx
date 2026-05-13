@@ -13,7 +13,7 @@ const MONETE = [
   { v: 0.05, label: '5c' },
 ]
 
-export default function ModalePagamento({ totale, tavoloInitial = '', onConferma, onAnnulla }) {
+export default function ModalePagamento({ totale, tavoloInitial = '', importoBuono = 0, nomeVolontario = '', onConferma, onAnnulla }) {
   const [tipo, setTipo] = useState(null)
   const [npStr, setNpStr] = useState('')
   const [tagli, setTagli] = useState([])
@@ -29,7 +29,7 @@ export default function ModalePagamento({ totale, tavoloInitial = '', onConferma
 
   const resto = ric - totale
   const pagatoEsatto = !haTagli && npStr === '' && tipo === 'contanti'
-  const canConferma = tipo !== null && (tipo === 'carta' || tipo === 'satispay' || tipo === 'omaggio' || pagatoEsatto || ric >= totale)
+  const canConferma = totale === 0 || (tipo !== null && (tipo === 'carta' || tipo === 'satispay' || tipo === 'omaggio' || pagatoEsatto || ric >= totale))
 
   const np = v => {
     if (tipo !== 'contanti') return
@@ -57,6 +57,10 @@ export default function ModalePagamento({ totale, tavoloInitial = '', onConferma
     : npStr.replace('.', ',') || ''
 
   const handleConferma = () => {
+    if (totale === 0) {
+      onConferma({ tipoPagamento: tipo || 'buono', pagato: 0, tavoloStr: tavoloStr.trim() })
+      return
+    }
     const pagato = pagatoEsatto ? totale : ric
     onConferma({ tipoPagamento: tipo, pagato, tavoloStr: tavoloStr.trim() })
   }
@@ -74,14 +78,39 @@ export default function ModalePagamento({ totale, tavoloInitial = '', onConferma
         <h3>💳 Pagamento</h3>
         <div className="modal-tot">{EUR(totale)}</div>
 
-        <div className="pag-tipos">
+        {importoBuono > 0 && (
+          <div style={{
+            background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8,
+            padding: '8px 12px', marginBottom: 10, fontSize: 13,
+          }}>
+            <span style={{ color: '#7c3aed', fontWeight: 700 }}>🎟 Buono {nomeVolontario}</span>
+            <span style={{ float: 'right', color: '#7c3aed', fontWeight: 700 }}>−{EUR(importoBuono)}</span>
+          </div>
+        )}
+
+        {totale === 0 ? (
+          <div style={{
+            background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10,
+            padding: '18px 16px', textAlign: 'center', marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>✅</div>
+            <div style={{ fontWeight: 700, color: '#16a34a', fontSize: 15 }}>
+              Interamente coperto dal buono
+            </div>
+            <div style={{ color: '#4ade80', fontSize: 13, marginTop: 4 }}>
+              Nessun pagamento aggiuntivo richiesto
+            </div>
+          </div>
+        ) : null}
+
+        {totale > 0 && <div className="pag-tipos">
           {[['contanti','💵 Contanti'],['carta','💳 Carta'],['satispay','📱 Satispay'],['omaggio','🎁 Omaggio']].map(([k,l]) => (
             <button key={k} className={`pag-tipo-btn ${tipo===k?'active':''}`}
               onClick={() => { setTipo(k); setNpStr(''); setTagli([]) }}>{l}</button>
           ))}
-        </div>
+        </div>}
 
-        {tipo === 'contanti' && (
+        {totale > 0 && tipo === 'contanti' && (
           <>
             {/* Banconote — tutte su una riga */}
             <div style={{ marginBottom: 6 }}>
@@ -150,7 +179,7 @@ export default function ModalePagamento({ totale, tavoloInitial = '', onConferma
           </>
         )}
 
-        {tipo === 'contanti' && (
+        {totale > 0 && tipo === 'contanti' && (
           <div className="resto-box">
             {pagatoEsatto
               ? <div style={{ textAlign:'center', color:'var(--green2)', fontWeight:600, fontSize:13 }}>

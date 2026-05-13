@@ -27,6 +27,13 @@ export default function Cassa({ utente }) {
   const [asporto, setAsporto] = useState(false)
   const [scontoV, setScontoV] = useState('')
   const [scontoT, setScontoT] = useState('€')
+
+  // Buono volontario
+  const [volontari, setVolontari] = useState([])
+  const [buonoVol, setBuonoVol] = useState(null)      // { id, nome, valore_buono }
+  const [importoBuonoStr, setImportoBuonoStr] = useState('')
+  const [saldoVol, setSaldoVol] = useState(null)       // saldo residuo sessione corrente
+  const [saldoLoading, setSaldoLoading] = useState(false)
   const [ingDropKey, setIngDropKey] = useState(null) // key della riga con dropdown ingredienti aperto
   const [pendingSplitProd, setPendingSplitProd] = useState(null) // prodotto_id appena splittato
 
@@ -96,17 +103,19 @@ export default function Cassa({ utente }) {
     let cancelled = false
     const load = async () => {
       try {
-        const [fam, prod, mn, ultSc] = await Promise.all([
+        const [fam, prod, mn, ultSc, vol] = await Promise.all([
           pb.collection('famiglie').getFullList({ sort: 'ordine,nome', filter: 'attivo=true' }),
           pb.collection('prodotti').getFullList({ sort: 'ordine,nome', filter: 'attivo=true', expand: 'magazzino_comune,famiglia' }),
           pb.collection('menu').getFullList({ sort: 'ordine,nome', filter: 'attivo=true' }),
           pb.collection('scontrini').getList(1, 1, { sort: '-numero', fields: 'numero' }).catch(() => ({ items: [] })),
+          pb.collection('volontari').getFullList({ sort: 'nome' }).catch(() => []),
         ])
         if (cancelled) return
         setFamiglie(fam)
         setProdotti(prod)
         setMenu(mn)
         setNextNum((ultSc.items[0]?.numero || 0) + 1)
+        setVolontari(vol)
       } catch(e) {
         if (e?.isAbort || e?.message?.includes('autocancelled')) return
         console.error('Caricamento cassa:', e)
@@ -187,10 +196,19 @@ export default function Cassa({ utente }) {
     cassa.svuota()
     setScontoV('')
     setScontoT('€')
+    setBuonoVol(null)
+    setImportoBuonoStr('')
+    setSaldoVol(null)
   }, [cassa])
 
   const handlePaga = async (params) => {
-    const res = await cassa.pagaeSalva({ ...params, utente, asporto })
+    const res = await cassa.pagaeSalva({
+      ...params,
+      utente,
+      asporto,
+      buonoVolontarioId: buonoVol?.id || null,
+      importoBuono,
+    })
     if (res.ok) {
       toast(`Scontrino #${res.numero} pagato`, 'v')
       setNextNum(res.numero + 1)
@@ -198,6 +216,9 @@ export default function Cassa({ utente }) {
       setAsporto(false)
       setScontoV('')
       setScontoT('€')
+      setBuonoVol(null)
+      setImportoBuonoStr('')
+      setSaldoVol(null)
       lastManualRefreshRef.current = Date.now()
       ricaricaProdotti()
     } else {
@@ -214,9 +235,31 @@ export default function Cassa({ utente }) {
     else toast('Errore: ' + res.error, 'r')
   }
 
+  // Calcola saldo residuo buono quando si seleziona un volontario
+  useEffect(() => {
+    if (!buonoVol) { setSaldoVol(null); return }
+    setSaldoLoading(true)
+    pb.autoCancellation(false)
+    pb.collection('scontrini')
+      .getFullList({ filter: `buono_volontario="${buonoVol.id}" && sessione="" && stornato=false`, fields: 'importo_buono' })
+      .then(scs => {
+        const usato = scs.reduce((s, sc) => s + (sc.importo_buono || 0), 0)
+        const saldo = Math.max(0, (buonoVol.valore_buono || 0) - usato)
+        setSaldoVol(saldo)
+        setImportoBuonoStr(saldo.toFixed(2))
+      })
+      .catch(() => setSaldoVol(null))
+      .finally(() => { setSaldoLoading(false); pb.autoCancellation(true) })
+  }, [buonoVol])
+
   const sub = cassa.getSub()
   const sconto = cassa.getScontoCalcolato()
   const totale = cassa.getTotale()
+
+  const importoBuono = buonoVol
+    ? Math.min(Math.max(0, parseFloat(importoBuonoStr) || 0), saldoVol ?? 0, totale)
+    : 0
+  const totaleDaPagare = Math.max(0, totale - importoBuono)
 
   // Righe scontrino ordinate per famiglia (stesso ordine della cassa)
   const righeOrdinate = useMemo(() => {
@@ -548,16 +591,72 @@ export default function Cassa({ utente }) {
             </div>
           )}
 
+          {/* BUONO VOLONTARIO */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: .4, marginBottom: 5 }}>
+              Buono Volontario
+            </div>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <select
+                value={buonoVol?.id || ''}
+                onChange={e => {
+                  const v = volontari.find(x => x.id === e.target.value) || null
+                  setBuonoVol(v)
+                  if (!v) { setImportoBuonoStr(''); setSaldoVol(null) }
+                }}
+                className="inp-small"
+                style={{ flex: 1 }}
+              >
+                <option value="">— Nessuno —</option>
+                {volontari.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+              </select>
+              {buonoVol && (
+                <>
+                  <input
+                    type="number" min="0" step="0.5"
+                    value={importoBuonoStr}
+                    onChange={e => setImportoBuonoStr(e.target.value)}
+                    className="inp-small"
+                    style={{ width: 68 }}
+                    disabled={saldoLoading}
+                  />
+                  <button className="btn-apply"
+                    onClick={() => { setBuonoVol(null); setImportoBuonoStr(''); setSaldoVol(null) }}
+                    style={{ background: 'var(--red)', color: '#fff', border: 'none' }}
+                    title="Rimuovi buono">✕</button>
+                </>
+              )}
+            </div>
+            {buonoVol && (
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
+                {saldoLoading
+                  ? 'Caricamento saldo...'
+                  : saldoVol !== null
+                    ? <>Saldo disponibile: <strong style={{ color: saldoVol < (parseFloat(importoBuonoStr)||0) ? 'var(--red)' : 'var(--green2)' }}>{EUR(saldoVol)}</strong> / {EUR(buonoVol.valore_buono)}
+                        {parseFloat(importoBuonoStr) > saldoVol && <span style={{ color: 'var(--red)', marginLeft: 4 }}>⚠ supera il saldo</span>}
+                      </>
+                    : 'Errore caricamento saldo'
+                }
+              </div>
+            )}
+          </div>
+
+          {importoBuono > 0 && (
+            <div className="tot-row" style={{ color: '#7c3aed' }}>
+              <span>Buono {buonoVol?.nome}</span><span>- {EUR(importoBuono)}</span>
+            </div>
+          )}
+
           <div className="tot-main">
-            <span className="tot-main-label">TOTALE</span>
-            <span className="tot-main-val">{EUR(totale)}</span>
+            <span className="tot-main-label">{importoBuono > 0 ? 'DA PAGARE' : 'TOTALE'}</span>
+            <span className="tot-main-val">{EUR(importoBuono > 0 ? totaleDaPagare : totale)}</span>
           </div>
 
           <div className="azioni-grid">
             <button className="btn-az btn-svuota" onClick={svuotaCompleto}>🗑 Svuota</button>
             <button className="btn-az btn-storno" onClick={() => setStoricoOpen(true)}>📋 Storico</button>
             <button className="btn-az btn-paga"
-              disabled={cassa.righe.length === 0 || cassa.loading}
+              disabled={cassa.righe.length === 0 || cassa.loading || saldoLoading}
               onClick={() => setPagOpen(true)}>
               {cassa.loading ? '...' : '💳 PAGA'}
             </button>
@@ -567,7 +666,9 @@ export default function Cassa({ utente }) {
 
       {pagOpen && (
         <ModalePagamento
-          totale={totale}
+          totale={totaleDaPagare}
+          importoBuono={importoBuono}
+          nomeVolontario={buonoVol?.nome || ''}
           tavoloInitial={cassa.tavolo?.numero || ''}
           onConferma={handlePaga}
           onAnnulla={() => setPagOpen(false)}
