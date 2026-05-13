@@ -95,16 +95,15 @@ export default function Statistiche({ utente }) {
   }, [righeRaw, filtroPagamento, scontriniVista])
 
   // ── Calcoli ──────────────────────────────────────────────────
-  const validi         = scontriniVista.filter(s => !s.stornato)
-  const incasso        = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const incassoLordo   = validi.reduce((s, x) => s + (x.totale_lordo || 0), 0)
-  const scontiTot      = incassoLordo - incasso
-  const stornati       = scontriniVista.filter(s => s.stornato).length
-  const incassoContanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const incassoCarta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const incassoSatispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const validi           = scontriniVista.filter(s => !s.stornato)
+  const incasso          = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const stornati         = scontriniVista.filter(s => s.stornato).length
+  const incassoContanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.pagato || 0), 0)
+  const incassoCarta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.pagato || 0), 0)
+  const incassoSatispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.pagato || 0), 0)
   const incassoOmaggio   = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
-  const qtaOmaggi       = venduto.reduce((s, v) => s + (v.omaggi || 0), 0)
+  const incassoBuoni     = validi.reduce((s, x) => s + (x.importo_buono || 0), 0)
+  const qtaOmaggi        = venduto.reduce((s, v) => s + (v.omaggi || 0), 0)
 
   // ── Elimina scontrini + sessioni collegate ───────────────────
   const eliminaScontriniPeriodo = async (tutto) => {
@@ -317,8 +316,8 @@ export default function Statistiche({ utente }) {
       <div class="riga"><span class="lbl">Contanti</span><span class="val">${EUR(incassoContanti)}</span></div>
       <div class="riga"><span class="lbl">Carta</span><span class="val">${EUR(incassoCarta)}</span></div>
       ${incassoSatispay > 0 ? `<div class="riga"><span class="lbl">Satispay</span><span class="val">${EUR(incassoSatispay)}</span></div>` : ''}
+      ${incassoBuoni > 0 ? `<div class="riga"><span class="lbl">Buoni volontari</span><span class="val">${EUR(incassoBuoni)}</span></div>` : ''}
       ${incassoOmaggio > 0 ? `<div class="riga"><span class="lbl">Omaggi</span><span class="val">${EUR(incassoOmaggio)}</span></div>` : ''}
-      ${scontiTot > 0 ? `<div class="riga"><span class="lbl">Sconti totali</span><span class="val">${EUR(scontiTot)}</span></div>` : ''}
       <hr>
       <h2>Venduto per prodotto</h2>
       <table><thead><tr><th>Prodotto</th><th class="r">Qtà</th><th class="r">Omag.</th><th class="r">Totale</th></tr></thead><tbody>
@@ -350,10 +349,10 @@ export default function Statistiche({ utente }) {
     ws1['!cols'] = [{wch:30},{wch:16},{wch:14},{wch:16},{wch:12}]
     XLSX.utils.book_append_sheet(wb, ws1, 'Venduto')
     const ws2 = XLSX.utils.aoa_to_sheet([
-      ['Numero','Data','Lordo EUR','Sconto EUR','Netto EUR','Pagamento','Stornato','Postazione'],
+      ['Numero','Data','Lordo EUR','Buono EUR','Netto EUR','Pagamento','Stornato','Postazione'],
       ...scontriniVista.map(s => [
         parseInt(s.numero), new Date(s.data_ora).toLocaleString('it-IT'),
-        parseFloat((s.totale_lordo||0).toFixed(2)), parseFloat((s.sconto_euro||0).toFixed(2)),
+        parseFloat((s.totale_lordo||0).toFixed(2)), parseFloat((s.importo_buono||0).toFixed(2)),
         parseFloat((s.totale_netto||0).toFixed(2)), s.tipo_pagamento,
         s.stornato ? 'SI' : 'NO', s.postazione || ''
       ])
@@ -363,13 +362,12 @@ export default function Statistiche({ utente }) {
     const ws3 = XLSX.utils.aoa_to_sheet([
       ['Voce','Valore'], ['Vista', titoloVista],
       ['Incasso netto', parseFloat(incasso.toFixed(2))],
-      ['Incasso lordo', parseFloat(incassoLordo.toFixed(2))],
-      ['Sconti totali', parseFloat(scontiTot.toFixed(2))],
       ['Scontrini', validi.length],
       ['Media scontrino', parseFloat((validi.length ? incasso/validi.length : 0).toFixed(2))],
       ['Contanti', parseFloat(incassoContanti.toFixed(2))],
       ['Carta', parseFloat(incassoCarta.toFixed(2))],
       ['Satispay', parseFloat(incassoSatispay.toFixed(2))],
+      ['Buoni volontari', parseFloat(incassoBuoni.toFixed(2))],
     ])
     ws3['!cols'] = [{wch:20},{wch:20}]
     XLSX.utils.book_append_sheet(wb, ws3, 'Riepilogo')
@@ -478,7 +476,7 @@ export default function Statistiche({ utente }) {
       {/* Filtro tipo pagamento */}
       <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:10, flexWrap:'wrap' }}>
         <span style={{ fontSize:11, color:'var(--text3)', fontWeight:600, marginRight:2 }}>Pagamento:</span>
-        {[['tutti','Tutti'],['contanti','Contanti'],['carta','Carta'],['satispay','Satispay'],['omaggio','Omaggio']].map(([k,l]) => (
+        {[['tutti','Tutti'],['contanti','Contanti'],['carta','Carta'],['satispay','Satispay'],['buono','Buono'],['omaggio','Omaggio']].map(([k,l]) => (
           <button key={k} onClick={() => setFiltroPagamento(k)} style={{
             padding:'3px 11px', borderRadius:6,
             border:`1px solid ${filtroPagamento===k?'var(--accent)':'var(--border)'}`,
@@ -507,9 +505,9 @@ export default function Statistiche({ utente }) {
         <div className="stat-card"><div className="stat-card-label">Contanti</div><div className="stat-card-val">{EUR(incassoContanti)}</div></div>
         <div className="stat-card"><div className="stat-card-label">Carta</div><div className="stat-card-val">{EUR(incassoCarta)}</div></div>
         {incassoSatispay > 0 && <div className="stat-card"><div className="stat-card-label">Satispay</div><div className="stat-card-val" style={{color:'#a855f7'}}>{EUR(incassoSatispay)}</div></div>}
+        {incassoBuoni > 0 && <div className="stat-card"><div className="stat-card-label">Buoni volontari</div><div className="stat-card-val" style={{color:'#7c3aed'}}>{EUR(incassoBuoni)}</div></div>}
         {incassoOmaggio > 0 && <div className="stat-card"><div className="stat-card-label">Omaggi (valore)</div><div className="stat-card-val" style={{color:'var(--green)'}}>{EUR(incassoOmaggio)}</div></div>}
         {qtaOmaggi > 0 && <div className="stat-card"><div className="stat-card-label">Pezzi omaggiati</div><div className="stat-card-val" style={{color:'var(--green)'}}>{qtaOmaggi}</div></div>}
-        <div className="stat-card"><div className="stat-card-label">Sconti</div><div className="stat-card-val">{EUR(scontiTot)}</div></div>
         <div className="stat-card"><div className="stat-card-label">↩ Stornati</div><div className="stat-card-val">{stornati}</div></div>
         <div className="stat-card"><div className="stat-card-label">Pezzi venduti</div><div className="stat-card-val">{venduto.reduce((s,v)=>s+v.qta,0)}</div></div>
       </div>
@@ -574,7 +572,7 @@ export default function Statistiche({ utente }) {
           <thead>
             <tr>
               <th>#</th><th>Data/Ora</th><th>Operatore</th>
-              <th>Lordo</th><th>Sconto</th><th>Netto</th>
+              <th>Lordo</th><th>Buono</th><th>Netto</th>
               <th>Pagamento</th><th>Stato</th>
             </tr>
           </thead>
@@ -585,7 +583,7 @@ export default function Statistiche({ utente }) {
                 <td>{new Date(s.data_ora).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
                 <td style={{ fontSize:12, color:'var(--text2)' }}>{s.postazione||'—'}</td>
                 <td style={{ color:'var(--text2)' }}>{EUR(s.totale_lordo)}</td>
-                <td style={{ color:'var(--green)' }}>{(s.sconto_euro>0||s.sconto_perc>0)?(s.sconto_euro>0?'- '+EUR(s.sconto_euro):s.sconto_perc+'%'):'—'}</td>
+                <td style={{ color:'#7c3aed' }}>{s.importo_buono > 0 ? '- '+EUR(s.importo_buono) : '—'}</td>
                 <td style={{ fontWeight:700, color:'var(--accent2)', fontFamily:'Barlow Condensed', fontSize:15 }}>{EUR(s.totale_netto)}</td>
                 <td style={{ textTransform:'capitalize' }}>{s.tipo_pagamento}</td>
                 <td><span className={`badge ${s.stornato?'badge-storno':'badge-ok'}`}>{s.stornato?'Stornato':'OK'}</span></td>

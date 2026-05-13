@@ -68,7 +68,7 @@ export default function Dashboard() {
       const f = buildFilters()
       const [sc, righe, trendSc] = await Promise.all([
         pb.collection('scontrini').getFullList({
-          filter: f.sc, fields: 'id,data_ora,totale_netto,totale_lordo,tipo_pagamento,stornato', sort: 'data_ora',
+          filter: f.sc, fields: 'id,data_ora,totale_netto,totale_lordo,tipo_pagamento,stornato,pagato,importo_buono', sort: 'data_ora',
         }),
         pb.collection('righe_scontrino').getFullList({
           filter: f.righe, fields: 'nome_snapshot,quantita,totale_riga,omaggio,stornata', expand: 'scontrino',
@@ -103,10 +103,11 @@ export default function Dashboard() {
   // ── KPI ───────────────────────────────────────────────────────
   const validi   = sc.filter(s => !s.stornato)
   const incasso  = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const contanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const carta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const satispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const contanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.pagato || 0), 0)
+  const carta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.pagato || 0), 0)
+  const satispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.pagato || 0), 0)
   const omaggi    = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
+  const buoni     = validi.reduce((s, x) => s + (x.importo_buono || 0), 0)
   const media    = validi.length ? incasso / validi.length : 0
   const stornati = sc.filter(s => s.stornato).length
 
@@ -141,6 +142,7 @@ export default function Dashboard() {
     { name: 'Contanti',  value: +contanti.toFixed(2),  color: C.green  },
     { name: 'Carta',     value: +carta.toFixed(2),     color: C.blue   },
     { name: 'Satispay',  value: +satispay.toFixed(2),  color: '#a855f7' },
+    { name: 'Buoni',     value: +buoni.toFixed(2),     color: C.purple },
     { name: 'Omaggi',    value: +omaggi.toFixed(2),    color: C.amber  },
   ].filter(d => d.value > 0)
 
@@ -270,6 +272,7 @@ export default function Dashboard() {
         <KCard label="Contanti"         val={EUR(contanti)}   color={C.green}    pct={PCT(contanti, incasso)}  pctLabel="del totale" />
         <KCard label="Carta"            val={EUR(carta)}      color={C.blue}     pct={PCT(carta, incasso)}    pctLabel="del totale" />
         <KCard label="Satispay"         val={EUR(satispay)}   color="#a855f7"    pct={PCT(satispay, incasso)} pctLabel="del totale" />
+        {buoni > 0 && <KCard label="Buoni volontari" val={EUR(buoni)} color={C.purple} pct={PCT(buoni, incasso)} pctLabel="del totale" />}
         <KCard label="Media scontrino"  val={EUR(media)}      color={C.amber} />
       </div>
 
@@ -445,7 +448,7 @@ export default function Dashboard() {
               <tr>
                 <th>#</th><th>Sessione</th><th>Apertura</th><th>Chiusura</th>
                 <th style={{ textAlign:'center' }}>Scontrini</th>
-                <th>Contanti</th><th>Carta</th><th>Satispay</th><th>Netto</th>
+                <th>Contanti</th><th>Carta</th><th>Satispay</th><th>Buoni</th><th>Netto</th>
               </tr>
             </thead>
             <tbody>
@@ -459,6 +462,7 @@ export default function Dashboard() {
                   <td style={{ color:C.green,    fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(s.totale_contanti)}</td>
                   <td style={{ color:C.blue,     fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(s.totale_carta)}</td>
                   <td style={{ color:'#a855f7',  fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(s.totale_satispay || 0)}</td>
+                  <td style={{ color:C.purple,   fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(s.totale_buoni || 0)}</td>
                   <td style={{ fontWeight:800, color:C.amber, fontFamily:'Barlow Condensed', fontSize:17 }}>{EUR(s.totale_netto)}</td>
                 </tr>
               ))}

@@ -25,8 +25,6 @@ export default function Cassa({ utente }) {
   const [storicoOpen, setStoricoOpen] = useState(false)
   const [nextNum, setNextNum] = useState('—')
   const [asporto, setAsporto] = useState(false)
-  const [scontoV, setScontoV] = useState('')
-  const [scontoT, setScontoT] = useState('€')
 
   // Buono volontario
   const [volontari, setVolontari] = useState([])
@@ -185,17 +183,8 @@ export default function Cassa({ utente }) {
     return { qty: p.quantita, low: !inf && p.quantita <= p.soglia_allarme, label: null, inf }
   }
 
-  const applicaSconto = () => {
-    const v = parseFloat(scontoV) || 0
-    if (scontoT === '%') { cassa.setScontoPerc(v); cassa.setScontoEuro(0) }
-    else { cassa.setScontoEuro(v); cassa.setScontoPerc(0) }
-    if (v > 0) toast('Sconto applicato', 'b')
-  }
-
   const svuotaCompleto = useCallback(() => {
     cassa.svuota()
-    setScontoV('')
-    setScontoT('€')
     setBuonoVol(null)
     setImportoBuonoStr('')
     setSaldoVol(null)
@@ -214,8 +203,6 @@ export default function Cassa({ utente }) {
       setNextNum(res.numero + 1)
       setPagOpen(false)
       setAsporto(false)
-      setScontoV('')
-      setScontoT('€')
       setBuonoVol(null)
       setImportoBuonoStr('')
       setSaldoVol(null)
@@ -253,7 +240,6 @@ export default function Cassa({ utente }) {
   }, [buonoVol])
 
   const sub = cassa.getSub()
-  const sconto = cassa.getScontoCalcolato()
   const totale = cassa.getTotale()
 
   const importoBuono = buonoVol
@@ -574,22 +560,6 @@ export default function Cassa({ utente }) {
 
         <div className="scont-footer">
           <div className="tot-row"><span>Subtotale</span><span>{EUR(sub)}</span></div>
-
-          <div className="sconto-row">
-            <input className="inp-small" style={{ width:70 }} type="number" min="0" placeholder="Sconto"
-              value={scontoV} onChange={e => setScontoV(e.target.value)} />
-            <select className="inp-small" value={scontoT} onChange={e => setScontoT(e.target.value)}>
-              <option value="%">%</option>
-              <option value="€">€</option>
-            </select>
-            <button className="btn-apply" onClick={applicaSconto}>Applica</button>
-          </div>
-
-          {sconto > 0 && (
-            <div className="tot-row" style={{ color:'var(--green2)' }}>
-              <span>Sconto</span><span>- {EUR(sconto)}</span>
-            </div>
-          )}
 
           {/* BUONO VOLONTARIO */}
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
