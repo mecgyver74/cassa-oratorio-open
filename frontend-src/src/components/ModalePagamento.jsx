@@ -14,7 +14,7 @@ const MONETE = [
 ]
 
 export default function ModalePagamento({ totale, tavoloInitial = '', onConferma, onAnnulla }) {
-  const [tipo, setTipo] = useState('contanti')
+  const [tipo, setTipo] = useState(null)
   const [npStr, setNpStr] = useState('')
   const [tagli, setTagli] = useState([])
   const [tavoloStr, setTavoloStr] = useState(tavoloInitial)
@@ -29,7 +29,7 @@ export default function ModalePagamento({ totale, tavoloInitial = '', onConferma
 
   const resto = ric - totale
   const pagatoEsatto = !haTagli && npStr === '' && tipo === 'contanti'
-  const canConferma = tipo === 'carta' || tipo === 'satispay' || tipo === 'omaggio' || pagatoEsatto || ric >= totale
+  const canConferma = tipo !== null && (tipo === 'carta' || tipo === 'satispay' || tipo === 'omaggio' || pagatoEsatto || ric >= totale)
 
   const np = v => {
     if (tipo !== 'contanti') return
