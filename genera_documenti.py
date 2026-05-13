@@ -1,0 +1,697 @@
+"""
+Genera 4 documenti Cassa Dalila con la stessa formattazione del manuale originale.
+Strategia: apre l'originale, conserva solo il frontespizio (paras 0-8),
+aggiorna i testi del titolo, aggiunge il nuovo contenuto.
+"""
+import copy, sys
+sys.stdout.reconfigure(encoding='utf-8')
+from docx import Document
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+from docx.shared import RGBColor
+
+ORIG = r"C:\temp\manuale_orig.docx"
+OUT  = r"G:\.shortcut-targets-by-id\1MeKnNdaDF-U2crMSnvSXGJEJrMvsOIGF\Cassa_Dalila"
+
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+def get_style_id(p):
+    pPr = p._element.find(qn('w:pPr'))
+    if pPr is None: return 'Normal'
+    ps = pPr.find(qn('w:pStyle'))
+    return ps.get(qn('w:val')) if ps is not None else 'Normal'
+
+def set_run_text(p, text):
+    """Sostituisce tutti i run di un paragrafo col testo dato, preservando il formato del primo run."""
+    fmt = {}
+    if p.runs:
+        r0 = p.runs[0]
+        fmt = {'bold': r0.bold, 'italic': r0.italic, 'size': r0.font.size}
+        try: fmt['color'] = r0.font.color.rgb
+        except: fmt['color'] = None
+    for r in p._element.findall(qn('w:r')):
+        p._element.remove(r)
+    run = p.add_run(text)
+    if fmt.get('bold'):   run.bold   = True
+    if fmt.get('italic'): run.italic = True
+    if fmt.get('size'):   run.font.size  = fmt['size']
+    if fmt.get('color'):  run.font.color.rgb = fmt['color']
+
+def set_spacing(p, before=None, after=None):
+    pPr = p._element.get_or_add_pPr()
+    sp = pPr.find(qn('w:spacing'))
+    if sp is None:
+        sp = OxmlElement('w:spacing'); pPr.append(sp)
+    if before is not None: sp.set(qn('w:before'), str(before))
+    if after  is not None: sp.set(qn('w:after'),  str(after))
+
+def add_h1(doc, tmpl_h1, text):
+    new_el = copy.deepcopy(tmpl_h1._element)
+    doc.element.body.append(new_el)
+    for p in doc.paragraphs:
+        if p._element is new_el:
+            set_run_text(p, text)
+            return p
+
+def add_h2(doc, tmpl_h2, text):
+    new_el = copy.deepcopy(tmpl_h2._element)
+    doc.element.body.append(new_el)
+    for p in doc.paragraphs:
+        if p._element is new_el:
+            set_run_text(p, text)
+            return p
+
+def add_normal(doc, tmpl_normal, text, after=120):
+    new_el = copy.deepcopy(tmpl_normal._element)
+    doc.element.body.append(new_el)
+    for p in doc.paragraphs:
+        if p._element is new_el:
+            set_run_text(p, text)
+            set_spacing(p, after=after)
+            return p
+
+def add_bullet(doc, tmpl_bullet, text):
+    new_el = copy.deepcopy(tmpl_bullet._element)
+    doc.element.body.append(new_el)
+    for p in doc.paragraphs:
+        if p._element is new_el:
+            set_run_text(p, text)
+            set_spacing(p, before=40, after=40)
+            return p
+
+def add_numbered(doc, tmpl_num, text):
+    new_el = copy.deepcopy(tmpl_num._element)
+    doc.element.body.append(new_el)
+    for p in doc.paragraphs:
+        if p._element is new_el:
+            set_run_text(p, text)
+            set_spacing(p, before=40, after=40)
+            return p
+
+QUOTE_COLORS = {
+    'suggerimento': ('#16A34A', 'F0FDF4'),
+    'attenzione':   ('#DC2626', 'FEF2F2'),
+    'nota':         ('#D97706', 'FEF3C7'),
+}
+
+def add_quote(doc, tmpl_quote, text):
+    """Clona un blockquote e aggiusta colore/sfondo in base alla parola chiave."""
+    new_el = copy.deepcopy(tmpl_quote._element)
+    doc.element.body.append(new_el)
+    for p in doc.paragraphs:
+        if p._element is new_el:
+            # Aggiorna colore border e shading in base al tipo
+            first_word = text.lstrip('*').split(':')[0].lower()
+            color_hex, fill_hex = QUOTE_COLORS.get(first_word, ('#2563EB', 'EFF6FF'))
+            pPr = p._element.get_or_add_pPr()
+            # border
+            pBdr = pPr.find(qn('w:pBdr'))
+            if pBdr is not None:
+                for side in pBdr:
+                    side.set(qn('w:color'), color_hex.lstrip('#'))
+            # shading
+            shd = pPr.find(qn('w:shd'))
+            if shd is not None:
+                shd.set(qn('w:fill'), fill_hex)
+            # clear runs and set bold label + rest
+            for r in p._element.findall(qn('w:r')):
+                p._element.remove(r)
+            import re
+            m = re.match(r'^([^:]+:)\s*(.*)', text)
+            if m:
+                label, rest = m.group(1), m.group(2)
+                r = p.add_run(label + ' ')
+                r.bold = True
+                r.font.color.rgb = RGBColor(
+                    int(color_hex[1:3], 16), int(color_hex[3:5], 16), int(color_hex[5:7], 16))
+                p.add_run(rest)
+            else:
+                p.add_run(text)
+            return p
+
+def add_page_break(doc, tmpl_pgbrk):
+    new_el = copy.deepcopy(tmpl_pgbrk._element)
+    doc.element.body.append(new_el)
+
+def add_table(doc, orig_table):
+    """Clona una tabella dall'originale (struttura + bordi)."""
+    new_tbl = copy.deepcopy(orig_table._element)
+    doc.element.body.append(new_tbl)
+    # trova la tabella clonata
+    for t in doc.tables:
+        if t._element is new_tbl:
+            return t
+    return None
+
+def set_cell(cell, text, bold=False):
+    for p in cell.paragraphs:
+        for r in p._element.findall(qn('w:r')):
+            p._element.remove(r)
+    run = cell.paragraphs[0].add_run(text)
+    if bold: run.bold = True
+
+# ── funzione principale di generazione ────────────────────────────────────────
+
+def make_doc(filename, big_title, subtitle1, main_title, subtitle2, version, content_fn):
+    """
+    Crea un nuovo documento clonando il frontespizio dall'originale
+    e aggiungendo il contenuto tramite content_fn(doc, templates).
+    """
+    doc = Document(ORIG)
+    body = doc.element.body
+    children = list(body)
+
+    # Trova l'indice del section break (para[8]) nel body
+    # I primi 9 paragrafi sono il frontespizio
+    front_paras = doc.paragraphs[:9]
+
+    # Elimina tutto ciò che viene dopo il frontespizio
+    front_els = {p._element for p in front_paras}
+    to_remove = []
+    found_front_end = False
+    for child in children:
+        if found_front_end:
+            to_remove.append(child)
+        else:
+            # Il section break è nel para[8]
+            if child is front_paras[8]._element:
+                found_front_end = True
+    for el in to_remove:
+        body.remove(el)
+
+    # Aggiorna testi del frontespizio
+    # para[1] = big title, para[2] = subtitle1, para[4] = main_title
+    # para[5] = subtitle2, para[6] = version
+    set_run_text(doc.paragraphs[1], big_title)
+    set_run_text(doc.paragraphs[2], subtitle1)
+    set_run_text(doc.paragraphs[4], main_title)
+    set_run_text(doc.paragraphs[5], subtitle2)
+    set_run_text(doc.paragraphs[6], version)
+
+    # Template paragraphs dall'originale — usati come "stampi" per clonare
+    # Dobbiamo prenderli dalla copia dell'originale PRIMA che venga eliminato
+    # Usiamo il documento originale separato per i template
+    orig = Document(ORIG)
+    def find_orig(text_frag, style_id=None):
+        for p in orig.paragraphs:
+            if text_frag in p.text:
+                if style_id is None: return p
+                if get_style_id(p) == style_id: return p
+        return None
+
+    templates = {
+        'h1':      find_orig('1. Introduzione', 'Heading10'),
+        'h2':      find_orig('Installazione con installer', 'Heading20'),
+        'bullet':  find_orig('Gestire il magazzino', 'Paragrafoelenco'),
+        'num':     find_orig('Scarica e installa Node.js', 'Paragrafoelenco'),
+        'normal':  find_orig('Il sistema e completamente autonomo'),
+        'suggest': find_orig("Suggerimento: L'installer"),
+        'warn':    find_orig('Attenzione: Non chiudere'),
+        'note':    find_orig('Nota: Se il tablet'),
+        'pgbrk':   orig.paragraphs[7],   # page break
+        'table_light': orig.tables[0],    # tabella con header grigio chiaro
+        'table_dark':  orig.tables[10],   # tabella con header navy
+    }
+
+    # Funzioni di aggiunta legate a doc e templates
+    def h1(text):    return add_h1(doc, templates['h1'], text)
+    def h2(text):    return add_h2(doc, templates['h2'], text)
+    def norm(text, after=120): return add_normal(doc, templates['normal'], text, after)
+    def blt(text):   return add_bullet(doc, templates['bullet'], text)
+    def num(text):   return add_numbered(doc, templates['num'], text)
+    def sug(text):   return add_quote(doc, templates['suggest'], text)
+    def warn(text):  return add_quote(doc, templates['warn'], text)
+    def note(text):  return add_quote(doc, templates['note'], text)
+    def pgbrk():     return add_page_break(doc, templates['pgbrk'])
+
+    def tbl_light(header_row, data_rows):
+        t = add_table(doc, templates['table_light'])
+        if t is None: return
+        # Header
+        while len(t.columns) < len(header_row):
+            pass  # usa la struttura clonata
+        # Resize: remove extra rows, keep 1 header
+        while len(t.rows) > 1:
+            t._tbl.remove(t.rows[-1]._tr)
+        for ci, h in enumerate(header_row[:len(t.columns)]):
+            set_cell(t.cell(0, ci), h, bold=True)
+        for row_data in data_rows:
+            row = t.add_row()
+            for ci, v in enumerate(row_data[:len(t.columns)]):
+                set_cell(row.cells[ci], v)
+
+    def tbl_dark(header_row, data_rows):
+        t = add_table(doc, templates['table_dark'])
+        if t is None: return
+        while len(t.rows) > 1:
+            t._tbl.remove(t.rows[-1]._tr)
+        for ci, h in enumerate(header_row[:len(t.columns)]):
+            set_cell(t.cell(0, ci), h, bold=True)
+        for row_data in data_rows:
+            row = t.add_row()
+            for ci, v in enumerate(row_data[:len(t.columns)]):
+                set_cell(row.cells[ci], v)
+
+    # Genera il contenuto
+    content_fn(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark)
+
+    path = f"{OUT}\\{filename}"
+    doc.save(path)
+    print(f"✓ {filename}")
+    return path
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DOCUMENTO 1 — CHANGELOG
+# ══════════════════════════════════════════════════════════════════════════════
+
+def content_changelog(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark):
+
+    h1('1. Nuovi metodi di pagamento')
+    h2('Satispay')
+    norm('È stato aggiunto Satispay come metodo di pagamento, accanto a Contanti, Carta e Omaggio.')
+    blt('Selezionabile nel pannello di pagamento come gli altri metodi')
+    blt('Tracciato separatamente nelle statistiche e nel report di chiusura')
+    blt('Incluso nell\'incasso reale (soldi fisicamente ricevuti)')
+
+    h2('Buono Volontario')
+    norm('I volontari possono ora pagare con un buono consumazione precaricato. Vedi sezione dedicata.')
+
+    pgbrk()
+    h1('2. Metodo di pagamento obbligatorio')
+    norm('In precedenza era possibile completare uno scontrino senza selezionare un metodo di pagamento.')
+    norm('Ora il metodo è obbligatorio: il pulsante Conferma rimane disattivato finché non se ne sceglie uno. Questo garantisce che il riepilogo di fine serata sia sempre accurato.')
+
+    pgbrk()
+    h1('3. Gestione Buoni Volontari')
+    h2('Configurazione')
+    norm('In Setup → Volontari è possibile creare l\'elenco dei volontari con il valore del loro buono consumazione (es. € 5,00).')
+    num('Vai su Setup → Volontari')
+    num('Clicca + Nuovo')
+    num('Inserisci nome, cognome, valore del buono ed eventuali note')
+    num('Salva')
+
+    h2('Utilizzo alla cassa')
+    norm('Nel piede dello scontrino compare la sezione Buono Volontario:')
+    num('Seleziona il volontario dal menu a tendina')
+    num('Il sistema mostra il saldo residuo del buono per la sessione corrente')
+    num('Inserisci l\'importo da scalare dal buono')
+    num('Il totale da pagare si aggiorna in tempo reale')
+    sug('Suggerimento: Se il buono copre l\'intero importo, il pagamento viene completato automaticamente. Se copre solo una parte, il residuo si paga con contanti, carta o Satispay.')
+
+    h2('Azzeramento automatico')
+    norm('Il saldo del buono si azzera a ogni chiusura cassa. All\'inizio di ogni nuova sessione i volontari ripartono con il buono pieno, indipendentemente dall\'uso precedente.')
+    note('Nota: I buoni non si accumulano tra sessioni diverse e non sono trasferibili.')
+
+    pgbrk()
+    h1('4. Correzione contabile — Incasso reale vs Valore venduto')
+    norm('I buoni non sono soldi che entrano in cassa: rappresentano un costo per l\'oratorio. La distinzione è ora esplicita in tutti i pannelli.')
+    tbl_light(
+        ['Voce', 'Cosa comprende'],
+        [
+            ['Incasso reale',        'Contanti + Carta + Satispay (soldi fisicamente incassati)'],
+            ['Buoni (costo oratorio)','Valore dei buoni usati — mostrato separatamente, non è un\'entrata'],
+            ['Valore venduto totale', 'Incasso reale + Buoni + Omaggi (tutto ciò che è uscito dal banco)'],
+        ]
+    )
+    norm('Questa distinzione appare in: anteprima chiusura cassa, Statistiche, Dashboard, report XLS.')
+
+    pgbrk()
+    h1('5. Piccoli miglioramenti')
+    h2('Numero tavolo nello scontrino')
+    norm('È possibile assegnare un numero tavolo direttamente nello scontrino, cliccando il pulsante Tavolo nel piede.')
+
+    h2('Modifica tipo di pagamento dallo Storico')
+    norm('Dallo storico scontrini è ora possibile correggere il metodo di pagamento di uno scontrino già emesso, senza stornarlo e rifarlo.')
+
+    h2('Filtro per metodo di pagamento nelle Statistiche')
+    norm('In cima alla pagina Statistiche sono disponibili pulsanti rapidi per filtrare gli scontrini per tipo di pagamento: Tutti · Contanti · Carta · Satispay · Buono · Omaggio.')
+
+    h2('Ordinamento volontari alfabetico')
+    norm('Il menu di selezione del volontario alla cassa mostra i nomi in ordine alfabetico.')
+
+    pgbrk()
+    h1('6. Report di chiusura migliorato')
+    norm('Il report di chiusura cassa è stato aggiornato. L\'email ora include un allegato Excel (.xlsx) al posto del vecchio file CSV.')
+    tbl_light(
+        ['Foglio XLS', 'Contenuto'],
+        [
+            ['Riepilogo',  'Incasso reale, buoni (costo), scontrini, media, contanti, carta, Satispay'],
+            ['Venduto',    'Quantità e valore per ogni prodotto, inclusi gli omaggi'],
+            ['Scontrini',  'Elenco completo con numero, data, lordo, buono, netto, pagamento, stato'],
+        ]
+    )
+    sug('Suggerimento: Il file XLS si apre direttamente con Excel o LibreOffice Calc senza conversioni.')
+
+    pgbrk()
+    h1('7. Riepilogo tecnico')
+    norm('Per chi gestisce l\'installazione:')
+    blt('Nuova collezione volontari nel database')
+    blt('Nuova collezione sessioni_cassa per lo storico delle chiusure')
+    blt('Nuovo campo tipo_pagamento: aggiunto il valore "satispay" e "buono"')
+    blt('Hook server-side aggiornato: genera XLS invece di CSV, calcola venduto per prodotto')
+    blt('Migration automatica: eseguita al primo avvio del server aggiornato')
+    warn('Attenzione: Prima di aggiornare il server esegui sempre un backup della cartella app\\pb_data\\.')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DOCUMENTO 2 — GUIDA RAPIDA CASSA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def content_guida_cassa(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark):
+
+    h1('1. Scontrino standard — Contanti o Carta')
+    num('Clicca sui prodotti per aggiungerli allo scontrino')
+    num('Usa + e − per modificare le quantità')
+    num('Clicca PAGA')
+    num('Seleziona Contanti oppure Carta')
+    num('Per contanti: inserisci l\'importo ricevuto (il sistema calcola il resto) oppure lascia vuoto per importo esatto')
+    num('Clicca Conferma')
+    sug('Suggerimento: Puoi anche digitare direttamente l\'importo ricevuto invece di usare i pulsanti banconote.')
+
+    pgbrk()
+    h1('2. Scontrino con Satispay')
+    num('Componi lo scontrino normalmente')
+    num('Clicca PAGA')
+    num('Seleziona Satispay')
+    num('Clicca Conferma (l\'importo è già quello del totale)')
+    note('Nota: Il pagamento Satispay viene tracciato separatamente nelle statistiche e nel report di chiusura.')
+
+    pgbrk()
+    h1('3. Scontrino con numero tavolo')
+    norm('Puoi assegnare un numero tavolo prima o dopo aver composto lo scontrino.')
+    h2('Prima del pagamento')
+    num('Componi lo scontrino')
+    num('Nel piede dello scontrino clicca il pulsante Tavolo')
+    num('Inserisci il numero e conferma')
+    num('Procedi normalmente con PAGA')
+    h2('Nel pannello di pagamento')
+    num('Clicca PAGA')
+    num('Inserisci o modifica il numero tavolo nel campo apposito nel pannello')
+    num('Seleziona il metodo e Conferma')
+
+    pgbrk()
+    h1('4. Ordine da asporto')
+    num('Componi lo scontrino')
+    num('Attiva il toggle Asporto nel piede dello scontrino (si evidenzia in arancione)')
+    num('Lo scontrino viene marcato come asporto in stampa e nelle comande')
+    num('Procedi normalmente con PAGA')
+    sug('Suggerimento: Gli ordini da asporto appaiono con evidenziazione dedicata nella pagina Comande.')
+
+    pgbrk()
+    h1('5. Articolo in omaggio (totale o parziale)')
+    h2('Omaggio su tutto lo scontrino')
+    num('Componi lo scontrino')
+    num('Clicca PAGA')
+    num('Seleziona Omaggio')
+    num('Il totale diventa zero — clicca Conferma')
+    h2('Omaggio su singole righe (da Storico)')
+    num('Emetti lo scontrino normalmente')
+    num('Apri lo Storico')
+    num('Trova lo scontrino e clicca su di esso')
+    num('Clicca sull\'icona omaggio sulla riga del prodotto da omaggiare')
+    num('Il totale si aggiorna automaticamente')
+    note('Nota: Le operazioni sullo storico sono registrate e non cancellano i dati — creano un movimento di rettifica.')
+
+    pgbrk()
+    h1('6. Pagamento con Buono Volontario')
+    h2('Buono copre l\'intero importo')
+    num('Componi lo scontrino')
+    num('Nella sezione Buono Volontario seleziona il volontario')
+    num('Verifica il saldo residuo mostrato')
+    num('Inserisci l\'importo (uguale al totale dello scontrino)')
+    num('Il totale da pagare diventa zero — clicca PAGA')
+    num('Il pannello mostra "Interamente coperto dal buono" — clicca Conferma')
+    h2('Buono copre solo una parte')
+    num('Componi lo scontrino')
+    num('Nella sezione Buono Volontario seleziona il volontario')
+    num('Inserisci l\'importo da scalare dal buono (al massimo il saldo disponibile)')
+    num('Il totale residuo si aggiorna in tempo reale')
+    num('Clicca PAGA')
+    num('Seleziona il metodo per il residuo (Contanti, Carta o Satispay)')
+    num('Clicca Conferma')
+    sug('Suggerimento: Il saldo del buono si azzera a ogni chiusura cassa. Se il volontario non ha saldo sufficiente, il sistema non permette di inserire un importo superiore.')
+
+    pgbrk()
+    h1('7. Scontrino con personalizzazione ingredienti')
+    norm('Solo per i prodotti che hanno ingredienti configurati in Setup → Prodotti.')
+    num('Aggiungi il prodotto allo scontrino')
+    num('Clicca il pulsante 🔧 accanto al prodotto nello scontrino')
+    num('Nel popup, deseleziona gli ingredienti da escludere')
+    num('Conferma — la nota viene aggiunta alla riga')
+    num('Procedi normalmente con PAGA')
+
+    pgbrk()
+    h1('8. Correggere uno scontrino già emesso')
+    h2('Rimuovere una riga')
+    num('Apri lo Storico')
+    num('Trova lo scontrino e clicca su di esso')
+    num('Clicca il pulsante di eliminazione sulla riga da rimuovere')
+    h2('Modificare la quantità')
+    num('Apri lo Storico')
+    num('Trova lo scontrino')
+    num('Usa i pulsanti + e − sulla riga per modificare la quantità')
+    h2('Modificare il metodo di pagamento')
+    num('Apri lo Storico')
+    num('Trova lo scontrino')
+    num('Clicca l\'icona di modifica sul tipo di pagamento')
+    num('Seleziona il nuovo metodo e salva')
+    warn('Attenzione: Le modifiche allo storico sono registrate e non eliminano i dati originali.')
+
+    pgbrk()
+    h1('9. Stornare uno scontrino')
+    norm('Lo storno annulla completamente uno scontrino. Usalo solo se non è possibile correggere la singola riga.')
+    num('Apri lo Storico')
+    num('Trova lo scontrino da annullare')
+    num('Clicca il pulsante Storna')
+    num('Conferma l\'operazione')
+    norm('Lo scontrino appare come stornato nel riepilogo e non viene conteggiato nelle statistiche.')
+    sug('Suggerimento: Se hai fatto uno scontrino doppio, stornane uno. Se hai sbagliato un prodotto, rimuovi solo quella riga dallo storico invece di stornare tutto.')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DOCUMENTO 3 — GUIDA RAPIDA CHIUSURA CASSA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def content_guida_chiusura(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark):
+
+    h1('1. Quando chiudere la cassa')
+    norm('La chiusura cassa va eseguita a fine di ogni serata o evento. Archivia tutti gli scontrini della sessione e azzera il contatore (il prossimo scontrino ripartirà da #0001).')
+    blt('Eseguila sempre prima di spegnere il sistema a fine serata')
+    blt('Solo gli amministratori possono eseguirla')
+    blt('È irreversibile: una volta confermata non si può annullare')
+    note('Nota: Le sessioni archiviate rimangono consultabili in Statistiche → Sessioni archiviate. I dati non vengono mai cancellati.')
+
+    pgbrk()
+    h1('2. Procedura di chiusura')
+    num('Vai nella pagina Statistiche')
+    num('Premi il pulsante 🔒 Chiudi cassa (visibile solo agli amministratori)')
+    num('Si apre l\'anteprima con il riepilogo della sessione corrente')
+    num('Verifica i dati (vedi sezione successiva)')
+    num('Assegna un nome alla sessione se vuoi (opzionale — di default usa la data)')
+    num('Clicca Chiudi cassa →')
+    num('Conferma nella schermata di avviso')
+    num('Attendi il completamento dell\'archiviazione')
+    num('Al termine il sistema mostra il riepilogo finale')
+    warn('Attenzione: Assicurati che non ci siano scontrini in corso di compilazione su altri dispositivi prima di chiudere.')
+
+    pgbrk()
+    h1('3. Interpretare il riepilogo')
+    norm('L\'anteprima mostra un riepilogo completo della sessione:')
+    tbl_light(
+        ['Voce', 'Significato'],
+        [
+            ['Scontrini validi',       'Numero di scontrini emessi e non stornati'],
+            ['Incasso reale',          'Soldi fisicamente in cassa: Contanti + Carta + Satispay'],
+            ['Contanti',               'Totale incassato in contanti (da verificare col cassetto)'],
+            ['Carta',                  'Totale pagato con carta (da verificare col POS)'],
+            ['Satispay',               'Totale pagato con Satispay'],
+            ['Buoni (costo oratorio)', 'Valore dei buoni usati — NON sono soldi in cassa'],
+            ['Omaggi',                 'Valore degli articoli dati in omaggio'],
+            ['Stornati',               'Numero di scontrini annullati (mostrato in rosso)'],
+        ]
+    )
+    sug('Suggerimento: Prima di confermare, confronta il totale Contanti con il denaro nel cassetto e il totale Carta con il giornaliero del POS.')
+
+    pgbrk()
+    h1('4. Il report via email')
+    norm('Se i destinatari sono configurati in Setup → Notifiche, alla chiusura viene inviata automaticamente un\'email con allegato Excel.')
+    tbl_light(
+        ['Foglio XLS', 'Contenuto'],
+        [
+            ['Riepilogo',  'Totali: incasso reale, buoni, scontrini, media, per metodo di pagamento'],
+            ['Venduto',    'Quantità e valore per ogni prodotto, con omaggi separati'],
+            ['Scontrini',  'Elenco completo di tutti gli scontrini della sessione'],
+        ]
+    )
+    norm('I file vengono salvati anche localmente nella cartella chiusure\\ con nome e data della sessione.')
+    sug('Suggerimento: Archivia i file XLS periodicamente su un disco esterno o Drive per avere uno storico completo delle serate.')
+
+    pgbrk()
+    h1('5. Dopo la chiusura')
+    norm('Dopo la chiusura la cassa è pronta per la sessione successiva:')
+    blt('Il contatore scontrini riparte da #0001')
+    blt('I saldi dei buoni volontari si azzerano (ogni volontario riparte con il buono pieno)')
+    blt('Le statistiche "Corrente" mostrano zero (sessione vuota)')
+    blt('Gli scontrini della sessione chiusa sono consultabili in Statistiche → Sessioni archiviate')
+
+    pgbrk()
+    h1('6. Consultare sessioni passate')
+    num('Vai in Statistiche')
+    num('Seleziona la scheda Sessioni archiviate')
+    num('Scegli la sessione dal menu a tendina')
+    num('Vengono mostrati tutti i dati della sessione: scontrini, incassi, dettaglio prodotti')
+    num('Puoi esportare in Excel anche le sessioni archiviate')
+
+    pgbrk()
+    h1('7. Backup dopo la chiusura')
+    norm('Si raccomanda di eseguire un backup dopo ogni chiusura cassa.')
+    num('Chiudi la pagina della cassa nel browser')
+    num('Fai doppio clic su BACKUP_DATI.bat nella cartella del programma')
+    num('Il backup viene salvato in backup\\ con data e ora nel nome del file')
+    num('Copia periodicamente la cartella backup\\ su un disco esterno')
+    warn('Attenzione: Non cancellare mai la cartella app\\pb_data\\. Contiene il database con tutti i dati.')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DOCUMENTO 4 — GUIDA RAPIDA MAGAZZINO
+# ══════════════════════════════════════════════════════════════════════════════
+
+def content_guida_magazzino(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark):
+
+    h1('1. Come funziona il magazzino')
+    norm('Il magazzino di Cassa Dalila è collegato direttamente alle vendite: ogni scontrino emesso scarica automaticamente le scorte dei prodotti venduti.')
+    tbl_light(
+        ['Evento', 'Effetto sulle scorte'],
+        [
+            ['Scontrino emesso',           'Scarico automatico di ogni prodotto venduto'],
+            ['Scontrino stornato',         'Carico automatico (le scorte tornano disponibili)'],
+            ['Riga rimossa dallo storico',  'Carico automatico della quantità rimossa'],
+            ['Carico manuale',             'Aggiunge la quantità inserita alla scorta attuale'],
+            ['Rettifica manuale',          'Imposta la scorta al valore esatto inserito'],
+        ]
+    )
+    note('Nota: I prodotti con scorta impostata a -1 hanno scorta illimitata e non vengono scalati.')
+
+    pgbrk()
+    h1('2. Le tre schede della pagina Magazzino')
+    tbl_light(
+        ['Scheda', 'Contenuto'],
+        [
+            ['Magazzini comuni',  'Stock condivisi tra più prodotti (es. panini usati da più tipi di hamburger)'],
+            ['Prodotti singoli',  'Prodotti con scorta propria, non collegati a un magazzino comune'],
+            ['Movimenti',         'Registro cronologico di tutte le variazioni: scarichi da vendita, carichi manuali, rettifiche'],
+        ]
+    )
+
+    pgbrk()
+    h1('3. Caricare merce ricevuta (Carico +)')
+    norm('Usa il carico quando ricevi nuova merce e vuoi aggiungere quantità alla scorta attuale.')
+    num('Vai in Magazzino')
+    num('Trova il prodotto (o magazzino comune) da ricaricare')
+    num('Clicca il pulsante Carico (+)')
+    num('Inserisci la quantità ricevuta (es. 50)')
+    num('Aggiungi una nota opzionale (es. "Carico serata 15 maggio")')
+    num('Clicca Salva')
+    norm('La nuova scorta sarà: scorta precedente + quantità inserita.')
+    sug('Suggerimento: Fai i carichi all\'inizio della serata, prima di aprire la cassa, così le scorte sono subito aggiornate.')
+
+    pgbrk()
+    h1('4. Rettificare le scorte dopo un conteggio fisico (Rettifica =)')
+    norm('Usa la rettifica quando vuoi impostare la scorta a un valore esatto dopo aver contato fisicamente la merce. La rettifica sovrascrive la scorta attuale.')
+    num('Vai in Magazzino')
+    num('Trova il prodotto da rettificare')
+    num('Clicca il pulsante Rettifica (=)')
+    num('Inserisci il valore contato fisicamente (es. 23)')
+    num('Aggiungi una nota (es. "Conteggio fisico 15/05")')
+    num('Clicca Salva')
+    norm('La scorta viene impostata esattamente al valore inserito, indipendentemente da quella precedente.')
+    warn('Attenzione: La rettifica sovrascrive il valore attuale. Usala solo dopo un conteggio fisico accurato.')
+
+    pgbrk()
+    h1('5. Magazzini comuni')
+    norm('Un magazzino comune permette a più prodotti di condividere lo stesso stock. Utile quando prodotti diversi usano lo stesso ingrediente principale (es. "panino" usato da Hamburger, Hamburger bacon, Hamburger vegetariano).')
+    h2('Creare un magazzino comune')
+    num('Vai su Setup → Magazzini comuni')
+    num('Clicca Nuovo magazzino comune')
+    num('Inserisci il nome (es. "Panini") e la scorta iniziale')
+    num('Salva')
+    h2('Collegare un prodotto al magazzino comune')
+    num('Vai su Setup → Prodotti')
+    num('Seleziona il prodotto')
+    num('Nel campo Magazzino comune seleziona il magazzino creato')
+    num('Salva')
+    norm('Da questo momento ogni vendita del prodotto scarica il magazzino comune, non la scorta del singolo prodotto.')
+    sug('Suggerimento: Puoi collegare quanti prodotti vuoi allo stesso magazzino comune. Le scorte si scalano tutte dallo stesso contatore.')
+
+    pgbrk()
+    h1('6. Leggere il registro movimenti')
+    norm('La scheda Movimenti mostra la cronologia completa di tutti i cambi di scorta.')
+    tbl_light(
+        ['Colonna', 'Significato'],
+        [
+            ['Data/ora',   'Quando è avvenuto il movimento'],
+            ['Prodotto',   'Prodotto o magazzino comune interessato'],
+            ['Tipo',       'Vendita (scarico automatico), Carico, Rettifica, Storno'],
+            ['Quantità',   'Variazione: negativa per scarichi, positiva per carichi'],
+            ['Scorta dopo','Scorta risultante dopo il movimento'],
+            ['Note',       'Eventuale nota manuale (per carichi e rettifiche)'],
+        ]
+    )
+    sug('Suggerimento: Usa il registro movimenti per verificare perché la scorta di un prodotto non corrisponde alle aspettative. Filtra per prodotto per vedere solo i suoi movimenti.')
+
+    pgbrk()
+    h1('7. Allarmi scorte basse')
+    norm('Ogni prodotto ha una soglia di allarme configurabile in Setup → Prodotti. Quando la scorta scende sotto la soglia, il prodotto viene segnalato nella pagina Magazzino.')
+    num('Vai su Setup → Prodotti')
+    num('Seleziona il prodotto')
+    num('Imposta il campo Soglia allarme (es. 10)')
+    num('Salva')
+    norm('Quando la scorta scende sotto la soglia, il prodotto appare evidenziato nella scheda Prodotti singoli o Magazzini comuni.')
+    sug('Suggerimento: Imposta la soglia di allarme a un valore che ti dia il tempo di ricaricare prima di esaurire le scorte. Per un prodotto che vendi 20 unità a serata, una soglia di 15 ti avvisa quando hai ancora quasi una serata di scorte.')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GENERA TUTTI I DOCUMENTI
+# ══════════════════════════════════════════════════════════════════════════════
+
+make_doc(
+    'Changelog_Maggio_2026.docx',
+    'CASSA DALILA',
+    'Changelog e note di rilascio',
+    'NOVITÀ DA MAGGIO 2026',
+    'Aggiornamenti dalla versione 1.3 alla 1.4',
+    'Maggio 2026',
+    content_changelog
+)
+
+make_doc(
+    'Guida_Rapida_Cassa.docx',
+    'CASSA DALILA',
+    'Operazioni di cassa',
+    'GUIDA RAPIDA',
+    'Creazione scontrini — tutte le ipotesi operative',
+    'v1.4  |  2026',
+    content_guida_cassa
+)
+
+make_doc(
+    'Guida_Rapida_Chiusura_Cassa.docx',
+    'CASSA DALILA',
+    'Chiusura cassa',
+    'GUIDA RAPIDA',
+    'Procedura di chiusura a fine serata',
+    'v1.4  |  2026',
+    content_guida_chiusura
+)
+
+make_doc(
+    'Guida_Rapida_Magazzino.docx',
+    'CASSA DALILA',
+    'Gestione magazzino',
+    'GUIDA RAPIDA',
+    'Carico, rettifica e controllo scorte',
+    'v1.4  |  2026',
+    content_guida_magazzino
+)
+
+print('\nTutti i documenti generati.')
