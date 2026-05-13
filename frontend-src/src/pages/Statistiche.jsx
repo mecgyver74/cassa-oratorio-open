@@ -96,13 +96,14 @@ export default function Statistiche({ utente }) {
 
   // ── Calcoli ──────────────────────────────────────────────────
   const validi           = scontriniVista.filter(s => !s.stornato)
-  const incasso          = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const valoreVenduto    = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
   const stornati         = scontriniVista.filter(s => s.stornato).length
   const incassoContanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.pagato || 0), 0)
   const incassoCarta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.pagato || 0), 0)
   const incassoSatispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.pagato || 0), 0)
   const incassoOmaggio   = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
   const incassoBuoni     = validi.reduce((s, x) => s + (x.importo_buono || 0), 0)
+  const incasso          = incassoContanti + incassoCarta + incassoSatispay
   const qtaOmaggi        = venduto.reduce((s, v) => s + (v.omaggi || 0), 0)
 
   // ── Elimina scontrini + sessioni collegate ───────────────────
@@ -309,20 +310,20 @@ export default function Statistiche({ utente }) {
       <div class="sub">Statistiche · ${titoloVista}</div>
       <div class="sub">${new Date().toLocaleString('it-IT')}</div>
       <hr>
-      <div class="riga"><span class="lbl">Incasso netto</span><span class="val grande verde">${EUR(incasso)}</span></div>
+      <div class="riga"><span class="lbl">Incasso reale</span><span class="val grande verde">${EUR(incasso)}</span></div>
       <div class="riga"><span class="lbl">Scontrini</span><span class="val">${validi.length}</span></div>
       <div class="riga"><span class="lbl">Media scontrino</span><span class="val">${EUR(validi.length ? incasso/validi.length : 0)}</span></div>
       <hr>
       <div class="riga"><span class="lbl">Contanti</span><span class="val">${EUR(incassoContanti)}</span></div>
       <div class="riga"><span class="lbl">Carta</span><span class="val">${EUR(incassoCarta)}</span></div>
       ${incassoSatispay > 0 ? `<div class="riga"><span class="lbl">Satispay</span><span class="val">${EUR(incassoSatispay)}</span></div>` : ''}
-      ${incassoBuoni > 0 ? `<div class="riga"><span class="lbl">Buoni volontari</span><span class="val">${EUR(incassoBuoni)}</span></div>` : ''}
+      ${incassoBuoni > 0 ? `<div class="riga"><span class="lbl" style="color:#7c3aed">Buoni (costo oratorio)</span><span class="val" style="color:#7c3aed">- ${EUR(incassoBuoni)}</span></div>` : ''}
       ${incassoOmaggio > 0 ? `<div class="riga"><span class="lbl">Omaggi</span><span class="val">${EUR(incassoOmaggio)}</span></div>` : ''}
       <hr>
       <h2>Venduto per prodotto</h2>
       <table><thead><tr><th>Prodotto</th><th class="r">Qtà</th><th class="r">Omag.</th><th class="r">Totale</th></tr></thead><tbody>
         ${venduto.map(v => `<tr><td>${v.nome}</td><td class="r">${v.qta+(v.omaggi||0)}</td><td class="r">${v.omaggi||'-'}</td><td class="r"><b>${EUR(v.tot)}</b></td></tr>`).join('')}
-        <tr class="tot"><td>TOTALE</td><td class="r">${venduto.reduce((s,v)=>s+v.qta+(v.omaggi||0),0)}</td><td class="r">${venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'-'}</td><td class="r">${EUR(incasso)}</td></tr>
+        <tr class="tot"><td>TOTALE</td><td class="r">${venduto.reduce((s,v)=>s+v.qta+(v.omaggi||0),0)}</td><td class="r">${venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'-'}</td><td class="r">${EUR(valoreVenduto)}</td></tr>
       </tbody></table></body></html>`
     const oldFrame = document.getElementById('_print_stats')
     if (oldFrame) oldFrame.remove()
@@ -361,13 +362,14 @@ export default function Statistiche({ utente }) {
     XLSX.utils.book_append_sheet(wb, ws2, 'Scontrini')
     const ws3 = XLSX.utils.aoa_to_sheet([
       ['Voce','Valore'], ['Vista', titoloVista],
-      ['Incasso netto', parseFloat(incasso.toFixed(2))],
+      ['Incasso reale', parseFloat(incasso.toFixed(2))],
       ['Scontrini', validi.length],
       ['Media scontrino', parseFloat((validi.length ? incasso/validi.length : 0).toFixed(2))],
       ['Contanti', parseFloat(incassoContanti.toFixed(2))],
       ['Carta', parseFloat(incassoCarta.toFixed(2))],
       ['Satispay', parseFloat(incassoSatispay.toFixed(2))],
-      ['Buoni volontari', parseFloat(incassoBuoni.toFixed(2))],
+      ['Buoni (costo oratorio)', parseFloat(incassoBuoni.toFixed(2))],
+      ['Valore venduto totale', parseFloat(valoreVenduto.toFixed(2))],
     ])
     ws3['!cols'] = [{wch:20},{wch:20}]
     XLSX.utils.book_append_sheet(wb, ws3, 'Riepilogo')
@@ -448,7 +450,7 @@ export default function Statistiche({ utente }) {
                 {sessioni.map(s => (
                   <option key={s.id} value={s.id}>
                     {s.nome || `Sessione #${s.numero_sessione}`}
-                    {s.scontrini_count != null ? `  ·  ${s.scontrini_count} sc  ·  ${EUR(s.totale_netto)}` : ''}
+                    {s.scontrini_count != null ? `  ·  ${s.scontrini_count} sc  ·  ${EUR((s.totale_contanti||0)+(s.totale_carta||0)+(s.totale_satispay||0))}` : ''}
                   </option>
                 ))}
               </select>
@@ -499,13 +501,13 @@ export default function Statistiche({ utente }) {
 
       {/* Cards statistiche */}
       <div className="stat-grid">
-        <div className="stat-card"><div className="stat-card-label">Incasso netto</div><div className="stat-card-val verde">{EUR(incasso)}</div></div>
+        <div className="stat-card"><div className="stat-card-label">Incasso reale</div><div className="stat-card-val verde">{EUR(incasso)}</div></div>
         <div className="stat-card"><div className="stat-card-label">Scontrini</div><div className="stat-card-val">{validi.length}</div></div>
         <div className="stat-card"><div className="stat-card-label">Media scontrino</div><div className="stat-card-val">{EUR(validi.length ? incasso/validi.length : 0)}</div></div>
         <div className="stat-card"><div className="stat-card-label">Contanti</div><div className="stat-card-val">{EUR(incassoContanti)}</div></div>
         <div className="stat-card"><div className="stat-card-label">Carta</div><div className="stat-card-val">{EUR(incassoCarta)}</div></div>
         {incassoSatispay > 0 && <div className="stat-card"><div className="stat-card-label">Satispay</div><div className="stat-card-val" style={{color:'#a855f7'}}>{EUR(incassoSatispay)}</div></div>}
-        {incassoBuoni > 0 && <div className="stat-card"><div className="stat-card-label">Buoni volontari</div><div className="stat-card-val" style={{color:'#7c3aed'}}>{EUR(incassoBuoni)}</div></div>}
+        {incassoBuoni > 0 && <div className="stat-card"><div className="stat-card-label">Buoni (costo oratorio)</div><div className="stat-card-val" style={{color:'#7c3aed'}}>- {EUR(incassoBuoni)}</div></div>}
         {incassoOmaggio > 0 && <div className="stat-card"><div className="stat-card-label">Omaggi (valore)</div><div className="stat-card-val" style={{color:'var(--green)'}}>{EUR(incassoOmaggio)}</div></div>}
         {qtaOmaggi > 0 && <div className="stat-card"><div className="stat-card-label">Pezzi omaggiati</div><div className="stat-card-val" style={{color:'var(--green)'}}>{qtaOmaggi}</div></div>}
         <div className="stat-card"><div className="stat-card-label">↩ Stornati</div><div className="stat-card-val">{stornati}</div></div>
@@ -533,7 +535,7 @@ export default function Statistiche({ utente }) {
                 <td>{venduto.reduce((s,v)=>s+v.qta+(v.omaggi||0),0)}</td>
                 <td style={{ color:'var(--green)' }}>{venduto.reduce((s,v)=>s+(v.omaggi||0),0)||'—'}</td>
                 <td>{venduto.reduce((s,v)=>s+v.qta,0)}</td>
-                <td style={{ color:'var(--green)', fontFamily:'Barlow Condensed', fontSize:15 }}>{EUR(incasso)}</td>
+                <td style={{ color:'var(--green)', fontFamily:'Barlow Condensed', fontSize:15 }}>{EUR(valoreVenduto)}</td>
               </tr>
             )}
             {!venduto.length && <tr><td colSpan={4} style={{ color:'var(--text3)', textAlign:'center', padding:20 }}>Nessun dato</td></tr>}

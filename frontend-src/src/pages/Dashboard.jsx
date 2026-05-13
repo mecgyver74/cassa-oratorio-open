@@ -101,15 +101,16 @@ export default function Dashboard() {
   const { sc, righe, trendSc } = dati
 
   // ── KPI ───────────────────────────────────────────────────────
-  const validi   = sc.filter(s => !s.stornato)
-  const incasso  = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
-  const contanti  = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.pagato || 0), 0)
-  const carta     = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.pagato || 0), 0)
-  const satispay  = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.pagato || 0), 0)
-  const omaggi    = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
-  const buoni     = validi.reduce((s, x) => s + (x.importo_buono || 0), 0)
-  const media    = validi.length ? incasso / validi.length : 0
-  const stornati = sc.filter(s => s.stornato).length
+  const validi        = sc.filter(s => !s.stornato)
+  const contanti      = validi.filter(s => s.tipo_pagamento === 'contanti').reduce((s, x) => s + (x.pagato || 0), 0)
+  const carta         = validi.filter(s => s.tipo_pagamento === 'carta').reduce((s, x) => s + (x.pagato || 0), 0)
+  const satispay      = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.pagato || 0), 0)
+  const omaggi        = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
+  const buoni         = validi.reduce((s, x) => s + (x.importo_buono || 0), 0)
+  const incasso       = contanti + carta + satispay   // soldi reali incassati
+  const valoreVenduto = validi.reduce((s, x) => s + (x.totale_netto || 0), 0)
+  const media         = validi.length ? incasso / validi.length : 0
+  const stornati      = sc.filter(s => s.stornato).length
 
   // ── Trend ─────────────────────────────────────────────────────
   // Per la vista "sessione" mostra per-ora, altrimenti per-giorno
@@ -231,7 +232,7 @@ export default function Dashboard() {
                 {sessioni.map(s => (
                   <option key={s.id} value={s.id}>
                     {s.nome || `Sessione #${s.numero_sessione}`}
-                    {s.scontrini_count != null ? `  ·  ${s.scontrini_count} sc  ·  ${EUR(s.totale_netto)}` : ''}
+                    {s.scontrini_count != null ? `  ·  ${s.scontrini_count} sc  ·  ${EUR((s.totale_contanti||0)+(s.totale_carta||0)+(s.totale_satispay||0))}` : ''}
                   </option>
                 ))}
               </select>
@@ -267,12 +268,12 @@ export default function Dashboard() {
 
       {/* ── KPI ─────────────────────────────────────────────────── */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:12, marginBottom:18 }}>
-        <KCard label="Incasso netto"    val={EUR(incasso)}    color={C.green} big />
+        <KCard label="Incasso reale"     val={EUR(incasso)}    color={C.green} big />
         <KCard label="Scontrini"        val={validi.length}   sub={stornati > 0 ? `${stornati} stornati` : undefined} />
-        <KCard label="Contanti"         val={EUR(contanti)}   color={C.green}    pct={PCT(contanti, incasso)}  pctLabel="del totale" />
-        <KCard label="Carta"            val={EUR(carta)}      color={C.blue}     pct={PCT(carta, incasso)}    pctLabel="del totale" />
-        <KCard label="Satispay"         val={EUR(satispay)}   color="#a855f7"    pct={PCT(satispay, incasso)} pctLabel="del totale" />
-        {buoni > 0 && <KCard label="Buoni volontari" val={EUR(buoni)} color={C.purple} pct={PCT(buoni, incasso)} pctLabel="del totale" />}
+        <KCard label="Contanti"         val={EUR(contanti)}   color={C.green}    pct={PCT(contanti, incasso)}  pctLabel="dell'incasso" />
+        <KCard label="Carta"            val={EUR(carta)}      color={C.blue}     pct={PCT(carta, incasso)}    pctLabel="dell'incasso" />
+        <KCard label="Satispay"         val={EUR(satispay)}   color="#a855f7"    pct={PCT(satispay, incasso)} pctLabel="dell'incasso" />
+        {buoni > 0 && <KCard label="Buoni (costo oratorio)" val={EUR(buoni)} color={C.purple} pct={PCT(buoni, valoreVenduto)} pctLabel="del venduto" />}
         <KCard label="Media scontrino"  val={EUR(media)}      color={C.amber} />
       </div>
 
@@ -356,7 +357,7 @@ export default function Dashboard() {
                     <span style={{ flex:1, fontSize:12, color:'var(--text2)' }}>{d.name}</span>
                     <span style={{ fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(d.value)}</span>
                     <span style={{ fontSize:11, color:'var(--text3)', width:34, textAlign:'right' }}>
-                      {PCT(d.value, incasso)}%
+                      {PCT(d.value, valoreVenduto + omaggi)}%
                     </span>
                   </div>
                 ))}
@@ -448,7 +449,7 @@ export default function Dashboard() {
               <tr>
                 <th>#</th><th>Sessione</th><th>Apertura</th><th>Chiusura</th>
                 <th style={{ textAlign:'center' }}>Scontrini</th>
-                <th>Contanti</th><th>Carta</th><th>Satispay</th><th>Buoni</th><th>Netto</th>
+                <th>Contanti</th><th>Carta</th><th>Satispay</th><th>Buoni (costo)</th><th>Incasso reale</th>
               </tr>
             </thead>
             <tbody>
@@ -463,7 +464,7 @@ export default function Dashboard() {
                   <td style={{ color:C.blue,     fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(s.totale_carta)}</td>
                   <td style={{ color:'#a855f7',  fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(s.totale_satispay || 0)}</td>
                   <td style={{ color:C.purple,   fontFamily:'Barlow Condensed', fontSize:15, fontWeight:700 }}>{EUR(s.totale_buoni || 0)}</td>
-                  <td style={{ fontWeight:800, color:C.amber, fontFamily:'Barlow Condensed', fontSize:17 }}>{EUR(s.totale_netto)}</td>
+                  <td style={{ fontWeight:800, color:C.amber, fontFamily:'Barlow Condensed', fontSize:17 }}>{EUR((s.totale_contanti||0)+(s.totale_carta||0)+(s.totale_satispay||0))}</td>
                 </tr>
               ))}
             </tbody>

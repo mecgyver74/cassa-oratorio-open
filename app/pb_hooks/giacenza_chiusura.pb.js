@@ -49,6 +49,7 @@ onRecordAfterCreateSuccess(function(e) {
         var totSatispay = sess.getFloat("totale_satispay")
         var totOmaggi   = sess.getFloat("totale_omaggi")
         var totBuoni    = sess.getFloat("totale_buoni")
+        var totIncasso  = totCont + totCarta + totSatispay
         var primoN    = sess.getInt("primo_numero")
         var ultimoN   = sess.getInt("ultimo_numero")
         var apertaIl  = sess.getString("aperta_il")
@@ -87,11 +88,11 @@ onRecordAfterCreateSuccess(function(e) {
         csv.push('"Scontrini emessi","'+scCount+'"')
         csv.push('"Dal numero","'+primoN+'"')
         csv.push('"Al numero","'+ultimoN+'"')
-        csv.push('"Totale netto","'+eur(totNetto)+'"')
+        csv.push('"Incasso reale","'+eur(totIncasso)+'"')
         csv.push('"Contanti","'+eur(totCont)+'"')
         csv.push('"Carta","'+eur(totCarta)+'"')
         if (totSatispay > 0) csv.push('"Satispay","'+eur(totSatispay)+'"')
-        if (totBuoni > 0)    csv.push('"Buoni volontari","'+eur(totBuoni)+'"')
+        if (totBuoni > 0)    csv.push('"Buoni (costo oratorio)","'+eur(totBuoni)+'"')
         csv.push('"Omaggi","'+eur(totOmaggi)+'"')
         csv.push("")
         csv.push("Venduto per prodotto")
@@ -149,12 +150,12 @@ onRecordAfterCreateSuccess(function(e) {
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Aperta il</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+fmtData(apertaIl)+'</td></tr>' +
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Chiusa il</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+fmtData(chiusaIl)+'</td></tr>' +
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Scontrini emessi</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+scCount+' (dal n.'+primoN+' al n.'+ultimoN+')</td></tr>' +
-            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Totale netto</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#16a34a">'+eur(totNetto)+'</td></tr>' +
+            '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">Incasso reale</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#16a34a">'+eur(totIncasso)+'</td></tr>' +
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui contanti</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totCont)+'</td></tr>' +
             '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui carta</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totCarta)+'</td></tr>' +
             (totSatispay > 0 ? '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#475569">di cui Satispay</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700">'+eur(totSatispay)+'</td></tr>' : '') +
-            (totBuoni > 0    ? '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#7c3aed">di cui buoni volontari</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#7c3aed">'+eur(totBuoni)+'</td></tr>' : '') +
-            '<tr><td style="padding:5px 10px;color:#475569">di cui omaggi</td><td style="padding:5px 10px;font-weight:700">'+eur(totOmaggi)+'</td></tr>' +
+            (totBuoni > 0    ? '<tr><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#7c3aed">Buoni (costo oratorio)</td><td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#7c3aed">- '+eur(totBuoni)+'</td></tr>' : '') +
+            '<tr><td style="padding:5px 10px;color:#475569">Omaggi</td><td style="padding:5px 10px;font-weight:700">'+eur(totOmaggi)+'</td></tr>' +
             '</table>'
 
         var html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Chiusura Cassa</title><style>' +
@@ -200,11 +201,11 @@ onRecordAfterCreateSuccess(function(e) {
         xlsR1 += xR(xS('Dal numero')+xN(primoN))
         xlsR1 += xR(xS('Al numero')+xN(ultimoN))
         xlsR1 += xR(xS('')+xS(''))
-        xlsR1 += xR(xS('Totale netto',true)+xN(totNetto,true))
+        xlsR1 += xR(xS('Incasso reale',true)+xN(totIncasso,true))
         xlsR1 += xR(xS('Contanti')+xN(totCont))
         xlsR1 += xR(xS('Carta')+xN(totCarta))
         if (totSatispay > 0) xlsR1 += xR(xS('Satispay')+xN(totSatispay))
-        if (totBuoni > 0) xlsR1 += xR(xS('Buoni volontari')+xN(totBuoni))
+        if (totBuoni > 0) xlsR1 += xR(xS('Buoni (costo oratorio)')+xN(totBuoni))
         xlsR1 += xR(xS('Omaggi')+xN(totOmaggi))
 
         var xlsR2 = ''  // Venduto per prodotto

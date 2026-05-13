@@ -47,6 +47,7 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
   const totSatispay   = validi.filter(s => s.tipo_pagamento === 'satispay').reduce((s, x) => s + (x.pagato || 0), 0)
   const totOmaggi     = validi.filter(s => s.tipo_pagamento === 'omaggio').reduce((s, x) => s + (x.totale_lordo || 0), 0)
   const totBuoni      = validi.reduce((s, x) => s + (x.importo_buono || 0), 0)
+  const totIncasso    = totContanti + totCarta + totSatispay
   const primoNum      = validi.length ? Math.min(...validi.map(s => s.numero)) : 0
   const ultimoNum     = validi.length ? Math.max(...validi.map(s => s.numero)) : 0
   const primaOra      = attivi.length ? attivi[0].data_ora : null
@@ -142,11 +143,11 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
             {/* Riepilogo sessione corrente */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
               <StatCard label="Scontrini validi"  val={validi.length}       big />
-              <StatCard label="Incasso netto"      val={EUR(totNetto)}       big green />
+              <StatCard label="Incasso reale"      val={EUR(totIncasso)}     big green />
               <StatCard label="Contanti"           val={EUR(totContanti)} />
               <StatCard label="Carta"              val={EUR(totCarta)} />
               {totSatispay > 0 && <StatCard label="Satispay"    val={EUR(totSatispay)} />}
-              {totBuoni   > 0 && <StatCard label="Buoni volontari" val={EUR(totBuoni)} />}
+              {totBuoni   > 0 && <StatCard label="Buoni (costo oratorio)" val={EUR(totBuoni)} purple />}
               {totOmaggi  > 0 && <StatCard label="Omaggi (lordo)" val={EUR(totOmaggi)} />}
               {stornati.length > 0 && <StatCard label="Stornati" val={stornati.length} warn />}
             </div>
@@ -240,7 +241,7 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
                 <StatCard label="Scontrini"    val={sessioneCreata.scontrini_count} big />
-                <StatCard label="Incasso netto" val={EUR(sessioneCreata.totale_netto)} big green />
+                <StatCard label="Incasso reale" val={EUR((sessioneCreata.totale_contanti||0)+(sessioneCreata.totale_carta||0)+(sessioneCreata.totale_satispay||0))} big green />
               </div>
               <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>
                 Il prossimo scontrino inizierà da <b>#0001</b>
@@ -255,7 +256,7 @@ export default function ModaleChiusuraCassa({ utente, onChiusa, onClose }) {
   )
 }
 
-function StatCard({ label, val, big, green, warn }) {
+function StatCard({ label, val, big, green, warn, purple }) {
   return (
     <div style={{
       background: 'var(--surf2)', border: '1px solid var(--border)',
@@ -265,7 +266,7 @@ function StatCard({ label, val, big, green, warn }) {
       <div style={{
         fontFamily: big ? 'Barlow Condensed' : undefined,
         fontSize: big ? 22 : 16, fontWeight: 700,
-        color: green ? 'var(--green)' : warn ? 'var(--red)' : 'var(--text)',
+        color: green ? 'var(--green)' : warn ? 'var(--red)' : purple ? '#7c3aed' : 'var(--text)',
       }}>{val}</div>
     </div>
   )
