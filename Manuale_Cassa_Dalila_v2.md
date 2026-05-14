@@ -276,7 +276,7 @@ La pagina **Comande** è pensata per essere aperta su un tablet in cucina o al b
 |----------|-------------|
 | X in attesa | Numero di comande ancora da preparare |
 | X evase | Numero di comande già completate |
-| Tutte / [famiglia]... | Filtra per famiglia di prodotti |
+| Tutte · Cucina · Bar... | Pulsanti famiglia: mostrano solo le comande con prodotti di quella famiglia |
 | Freccia su/giù | Inverte l'ordine di visualizzazione |
 | Riepilogo | Mostra i totali aggregati per prodotto |
 | Telefono (QR) | Genera un QR Code per aprire la cassa da un altro dispositivo |
