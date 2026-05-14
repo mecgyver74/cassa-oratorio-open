@@ -468,8 +468,8 @@ def content_guida_cassa(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
     h1('2. Omaggio')
     h2('Tutto lo scontrino')
     num('Componi scontrino → PAGA → Omaggio → Conferma (totale = €0)')
-    h2('Singola riga (da Storico)')
-    num('Storico → seleziona scontrino → icona omaggio sulla riga interessata')
+    h2('Singola riga')
+    num('Clicca l\'icona omaggio direttamente sulla riga del prodotto nello scontrino')
 
     h1('3. Buono Volontario')
     num('Componi lo scontrino')
