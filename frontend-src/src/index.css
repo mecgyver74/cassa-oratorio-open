@@ -131,10 +131,15 @@ input, select, textarea { font-family: inherit; }
 .prod-btn .ps.low { color: var(--red); }
 .prod-btn .ps.inf { color: var(--text3); }
 @keyframes scorta-low {
-  0%, 100% { outline-color: transparent; }
-  50%       { outline-color: var(--red); }
+  0%, 100% { border-color: transparent; }
+  50%       { border-color: var(--red); }
 }
-.prod-btn.low { outline: 3px solid transparent; outline-offset: 2px; animation: scorta-low 1.4s ease-in-out infinite; }
+.prod-btn.low::before {
+  content: ''; position: absolute; inset: 0;
+  border-radius: var(--r); border: 3px solid transparent;
+  animation: scorta-low 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
 
 /* PANEL DESTRA - scontrino */
 .panel-scontrino {
