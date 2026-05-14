@@ -21,7 +21,7 @@ export default function ModaleStorico({ onClose, onRicarica, stornoScontrino, to
   const caricaScontrini = async () => {
     setLoading(true)
     try {
-      const r = await pb.collection('scontrini').getList(1, 100, {
+      const r = await pb.collection('scontrini').getList(1, 500, {
         sort: '-numero', expand: 'operatore,tavolo',
         filter: '(sessione="" || sessione=null)'
       })
