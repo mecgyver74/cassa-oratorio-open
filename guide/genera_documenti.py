@@ -540,101 +540,51 @@ def content_guida_chiusura(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DOCUMENTO 4 — GUIDA RAPIDA MAGAZZINO
+# DOCUMENTO 4 — GUIDA RAPIDA MAGAZZINO (compatta, 2 facciate)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def content_guida_magazzino(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark):
+def content_guida_magazzino(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 
     h1('1. Come funziona il magazzino')
-    norm('Il magazzino di Cassa Dalila è collegato direttamente alle vendite: ogni scontrino emesso scarica automaticamente le scorte dei prodotti venduti.')
+    norm('Le scorte si aggiornano automaticamente ad ogni scontrino. La pagina Magazzino ha tre schede: Magazzini comuni, Prodotti singoli, Movimenti.')
     tbl_light(
         ['Evento', 'Effetto sulle scorte'],
         [
-            ['Scontrino emesso',           'Scarico automatico di ogni prodotto venduto'],
-            ['Scontrino stornato',         'Carico automatico (le scorte tornano disponibili)'],
-            ['Riga rimossa dallo storico',  'Carico automatico della quantità rimossa'],
-            ['Carico manuale',             'Aggiunge la quantità inserita alla scorta attuale'],
-            ['Rettifica manuale',          'Imposta la scorta al valore esatto inserito'],
+            ['Scontrino emesso',          'Scarico automatico dei prodotti venduti'],
+            ['Scontrino stornato',        'Carico automatico (scorte ripristinate)'],
+            ['Riga rimossa dallo storico','Carico automatico della quantità rimossa'],
+            ['Carico manuale (+)',        'Aggiunge alla scorta attuale'],
+            ['Rettifica (=)',             'Imposta la scorta al valore esatto'],
         ]
     )
-    note('Nota: I prodotti con scorta impostata a -1 hanno scorta illimitata e non vengono scalati.')
+    note('Nota: Scorta -1 = illimitata, non viene scalata dalle vendite.')
 
-    pgbrk()
-    h1('2. Le tre schede della pagina Magazzino')
-    tbl_light(
-        ['Scheda', 'Contenuto'],
-        [
-            ['Magazzini comuni',  'Stock condivisi tra più prodotti (es. panini usati da più tipi di hamburger)'],
-            ['Prodotti singoli',  'Prodotti con scorta propria, non collegati a un magazzino comune'],
-            ['Movimenti',         'Registro cronologico di tutte le variazioni: scarichi da vendita, carichi manuali, rettifiche'],
-        ]
-    )
+    h1('2. Carico e rettifica')
+    h2('Carico + (merce ricevuta)')
+    num('Magazzino → trova prodotto o magazzino comune → Carico (+)')
+    num('Inserisci la quantità ricevuta → aggiungi nota opzionale → Salva')
+    norm('Risultato: scorta precedente + quantità inserita.')
+    sug('Suggerimento: Fai i carichi a inizio serata, prima di aprire la cassa.')
+    h2('Rettifica = (conteggio fisico)')
+    num('Magazzino → trova prodotto → Rettifica (=)')
+    num('Inserisci il valore contato fisicamente → aggiungi nota → Salva')
+    norm('Risultato: la scorta viene sovrascritta con il valore inserito.')
+    warn('Attenzione: La rettifica sovrascrive il valore attuale — usala solo dopo un conteggio fisico.')
 
-    pgbrk()
-    h1('3. Caricare merce ricevuta (Carico +)')
-    norm('Usa il carico quando ricevi nuova merce e vuoi aggiungere quantità alla scorta attuale.')
-    num('Vai in Magazzino')
-    num('Trova il prodotto (o magazzino comune) da ricaricare')
-    num('Clicca il pulsante Carico (+)')
-    num('Inserisci la quantità ricevuta (es. 50)')
-    num('Aggiungi una nota opzionale (es. "Carico serata 15 maggio")')
-    num('Clicca Salva')
-    norm('La nuova scorta sarà: scorta precedente + quantità inserita.')
-    sug('Suggerimento: Fai i carichi all\'inizio della serata, prima di aprire la cassa, così le scorte sono subito aggiornate.')
-
-    pgbrk()
-    h1('4. Rettificare le scorte dopo un conteggio fisico (Rettifica =)')
-    norm('Usa la rettifica quando vuoi impostare la scorta a un valore esatto dopo aver contato fisicamente la merce. La rettifica sovrascrive la scorta attuale.')
-    num('Vai in Magazzino')
-    num('Trova il prodotto da rettificare')
-    num('Clicca il pulsante Rettifica (=)')
-    num('Inserisci il valore contato fisicamente (es. 23)')
-    num('Aggiungi una nota (es. "Conteggio fisico 15/05")')
-    num('Clicca Salva')
-    norm('La scorta viene impostata esattamente al valore inserito, indipendentemente da quella precedente.')
-    warn('Attenzione: La rettifica sovrascrive il valore attuale. Usala solo dopo un conteggio fisico accurato.')
-
-    pgbrk()
-    h1('5. Magazzini comuni')
-    norm('Un magazzino comune permette a più prodotti di condividere lo stesso stock. Utile quando prodotti diversi usano lo stesso ingrediente principale (es. "panino" usato da Hamburger, Hamburger bacon, Hamburger vegetariano).')
+    h1('3. Magazzini comuni')
+    norm('Permettono a più prodotti di condividere lo stesso stock (es. "Panini" usato da Hamburger, Hamburger bacon, Veggie burger).')
     h2('Creare un magazzino comune')
-    num('Vai su Setup → Magazzini comuni')
-    num('Clicca Nuovo magazzino comune')
-    num('Inserisci il nome (es. "Panini") e la scorta iniziale')
-    num('Salva')
-    h2('Collegare un prodotto al magazzino comune')
-    num('Vai su Setup → Prodotti')
-    num('Seleziona il prodotto')
-    num('Nel campo Magazzino comune seleziona il magazzino creato')
-    num('Salva')
-    norm('Da questo momento ogni vendita del prodotto scarica il magazzino comune, non la scorta del singolo prodotto.')
-    sug('Suggerimento: Puoi collegare quanti prodotti vuoi allo stesso magazzino comune. Le scorte si scalano tutte dallo stesso contatore.')
+    num('Setup → Magazzini comuni → Nuovo → inserisci nome e scorta iniziale → Salva')
+    h2('Collegare un prodotto')
+    num('Setup → Prodotti → seleziona prodotto → campo Magazzino comune → Salva')
+    norm('Ogni vendita del prodotto scarica il magazzino comune, non la scorta singola.')
 
-    pgbrk()
-    h1('6. Leggere il registro movimenti')
-    norm('La scheda Movimenti mostra la cronologia completa di tutti i cambi di scorta.')
-    tbl_light(
-        ['Colonna', 'Significato'],
-        [
-            ['Data/ora',   'Quando è avvenuto il movimento'],
-            ['Prodotto',   'Prodotto o magazzino comune interessato'],
-            ['Tipo',       'Vendita (scarico automatico), Carico, Rettifica, Storno'],
-            ['Quantità',   'Variazione: negativa per scarichi, positiva per carichi'],
-            ['Scorta dopo','Scorta risultante dopo il movimento'],
-            ['Note',       'Eventuale nota manuale (per carichi e rettifiche)'],
-        ]
-    )
-    sug('Suggerimento: Usa il registro movimenti per verificare perché la scorta di un prodotto non corrisponde alle aspettative. Filtra per prodotto per vedere solo i suoi movimenti.')
-
-    pgbrk()
-    h1('7. Allarmi scorte basse')
-    norm('Ogni prodotto ha una soglia di allarme configurabile in Setup → Prodotti. Quando la scorta scende sotto la soglia, il prodotto viene segnalato nella pagina Magazzino.')
-    num('Vai su Setup → Prodotti')
-    num('Seleziona il prodotto')
-    num('Imposta il campo Soglia allarme (es. 10)')
-    num('Salva')
-    norm('Quando la scorta scende sotto la soglia, il prodotto appare evidenziato nella scheda Prodotti singoli o Magazzini comuni.')
-    sug('Suggerimento: Imposta la soglia di allarme a un valore che ti dia il tempo di ricaricare prima di esaurire le scorte. Per un prodotto che vendi 20 unità a serata, una soglia di 15 ti avvisa quando hai ancora quasi una serata di scorte.')
+    h1('4. Movimenti e allarmi scorte')
+    h2('Registro movimenti')
+    norm('La scheda Movimenti mostra la cronologia completa: tipo (vendita, carico, rettifica, storno), quantità variata, scorta risultante, nota.')
+    sug('Suggerimento: Filtra per prodotto per capire perché una scorta non torna.')
+    h2('Allarmi scorte basse')
+    norm('Configura la soglia in Setup → Prodotti → campo Soglia allarme. Quando la scorta scende sotto soglia, il prodotto appare evidenziato nella pagina Magazzino.')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -704,13 +654,10 @@ make_compact_doc(
     dest=GUIDE_OUT
 )
 
-make_doc(
+make_compact_doc(
     'Guida_Rapida_Magazzino.docx',
-    'CASSA DALILA',
-    'Gestione magazzino',
-    'GUIDA RAPIDA',
-    'Carico, rettifica e controllo scorte',
-    'v1.4  |  2026',
+    'GUIDA RAPIDA — GESTIONE MAGAZZINO',
+    'Cassa Dalila v1.4  ·  Oratorio Dalila',
     content_guida_magazzino,
     dest=GUIDE_OUT
 )
