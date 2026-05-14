@@ -665,24 +665,13 @@ def content_guida_comande(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
     blt('Seguono lo stesso flusso delle comande normali (Pronta → Consegnata)')
     blt('Puoi filtrarli con il tasto Asporto nella barra filtri (vedi sezione 4)')
 
-    h1('4. Filtri')
-    tbl_light(
-        ['Filtro', 'Mostra'],
-        [
-            ['Tutti',      'Tutte le comande attive (in attesa + pronte)'],
-            ['In attesa',  'Solo le comande ancora da preparare'],
-            ['Pronte',     'Solo le comande pronte da servire'],
-            ['Asporto',    'Solo gli ordini con flag asporto attivo'],
-        ]
-    )
-    sug('Suggerimento: Nelle serate affollate usa In attesa per concentrarti su ciò che ancora non hai preparato.')
-
-    h1('5. Se una comanda non arriva')
-    norm('La comanda appare sulla pagina non appena la cassa conferma lo scontrino. Se non appare:')
-    blt('Verifica che lo scontrino sia stato confermato (non solo composto)')
-    blt('Ricarica la pagina manualmente')
-    blt('Controlla che il server (PocketBase) sia in esecuzione')
-    warn('Attenzione: Non chiudere la finestra del browser durante il servizio — la pagina perderebbe gli aggiornamenti automatici.')
+    h1('4. Filtri, riepilogo e ordinamento')
+    h2('Filtro per famiglia')
+    norm('In cima alla schermata sono presenti i pulsanti delle famiglie di prodotti (es. Cucina, Bar, Dolci). Selezionando una famiglia si vedono solo le comande che contengono prodotti di quella famiglia.')
+    h2('Riepilogo')
+    norm('Il pulsante Riepilogo mostra un conteggio aggregato di tutti i prodotti ancora da preparare, raggruppati per tipo. Utile per avere un colpo d\'occhio su quante porzioni mancano prima di servire.')
+    h2('Ordinamento')
+    norm('È possibile cambiare l\'ordinamento delle card tra: per ora di arrivo (default) e per tavolo.')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
