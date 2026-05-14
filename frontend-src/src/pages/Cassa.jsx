@@ -318,7 +318,7 @@ export default function Cassa({ utente }) {
     const fam = famiglie.find(f => f.id === p.famiglia)
     const bgColor = p.colore || fam?.colore || '#6b7280'
     return (
-      <button key={p.id} className={`prod-btn ${esaurito ? 'esaurito' : ''}`}
+      <button key={p.id} className={`prod-btn ${esaurito ? 'esaurito' : sc.low ? 'low' : ''}`}
         style={{ background: bgColor, boxShadow: `0 3px 10px ${bgColor}44`,
           height: btnHeight, minHeight: btnHeight,
           width: btnWidth, minWidth: btnWidth,
