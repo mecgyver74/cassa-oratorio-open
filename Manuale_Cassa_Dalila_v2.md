@@ -210,10 +210,12 @@ Per ricevere il riepilogo di chiusura cassa via email con allegato Excel:
 3. Modifica le quantità con i pulsanti **+** e **−**
 4. Per aggiungere una nota a una riga, fai doppio clic sul nome del prodotto
 5. Per personalizzare gli ingredienti, clicca il pulsante 🔧
-6. Per assegnare un numero tavolo, clicca il pulsante **Tavolo** nello scontrino
+6. Per omaggiare una singola riga, clicca l'icona omaggio direttamente sulla riga del prodotto
+7. Per assegnare un numero tavolo, clicca il pulsante **Tavolo** nello scontrino
 7. Per un ordine da asporto, attiva il toggle **Asporto**
 8. Se è presente un volontario, selezionalo nella sezione **Buono Volontario** (vedi sotto)
 9. Clicca **PAGA** per aprire il pannello di pagamento
+
 
 ### Buono Volontario *(nuovo)*
 
@@ -258,7 +260,6 @@ Il pulsante **Storico** mostra gli scontrini della giornata. Da qui puoi:
 - Modificare le quantità
 - Stornare completamente uno scontrino
 - Ristampare uno scontrino con il pulsante **Ristampa**
-- Impostare o rimuovere l'omaggio su singole righe
 - **Modificare il tipo di pagamento** di uno scontrino già emesso *(nuovo)*
 
 > **Attenzione:** Le operazioni sullo storico sono registrate e non cancellano i dati — lo storno crea un movimento negativo che annulla lo scontrino originale.
