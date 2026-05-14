@@ -545,7 +545,7 @@ def content_guida_chiusura(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 def content_guida_magazzino(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 
     h1('1. Come funziona il magazzino')
-    norm('Le scorte si aggiornano automaticamente ad ogni scontrino. La pagina Magazzino ha tre schede: Magazzini comuni, Prodotti singoli, Movimenti.')
+    norm('Le scorte si aggiornano automaticamente ad ogni scontrino. La pagina Magazzino ha due schede: Magazzini comuni e Prodotti singoli.')
     tbl_light(
         ['Evento', 'Effetto sulle scorte'],
         [
