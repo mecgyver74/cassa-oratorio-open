@@ -283,16 +283,13 @@ La pagina **Comande** è pensata per essere aperta su un tablet in cucina o al b
 
 ### Evadere una comanda
 
-Quando un ordine è pronto, premi il pulsante verde **EVASA** sulla card. La comanda passa nella sezione in basso. Premi **Riapri** se hai premuto per errore.
+1. Man mano che i prodotti sono pronti, spunta le singole righe sulla card — le checkbox sono sincronizzate in tempo reale tra tutti i dispositivi
+2. Quando tutto è pronto, premi **Segna come evasa**
+3. La comanda scompare dalla lista attiva e viene archiviata
 
-### Checkbox per singola riga
+### Riepilogo
 
-Ogni riga di una comanda ha una checkbox per segnare i singoli prodotti come pronti. Le checkbox sono sincronizzate in tempo reale tra tutti i dispositivi.
-
-### Vista per-riga e Riepilogo
-
-- **Vista per-riga:** mostra tutti i prodotti raggruppati per tipo invece che per scontrino.
-- **Riepilogo:** pannello con i totali aggregati di tutti i prodotti ancora da preparare.
+Il pulsante **Riepilogo** mostra i totali aggregati di tutti i prodotti ancora da preparare — utile per avere un colpo d'occhio sulle quantità in coda.
 
 ---
 
