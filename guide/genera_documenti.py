@@ -10,8 +10,9 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from docx.shared import RGBColor, Pt
 
-ORIG = r"C:\temp\manuale_orig.docx"
-OUT  = r"G:\.shortcut-targets-by-id\1MeKnNdaDF-U2crMSnvSXGJEJrMvsOIGF\Cassa_Dalila"
+ORIG      = r"C:\temp\manuale_orig.docx"
+OUT       = r"G:\.shortcut-targets-by-id\1MeKnNdaDF-U2crMSnvSXGJEJrMvsOIGF\Cassa_Dalila"
+GUIDE_OUT = OUT + r"\guide"
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -152,7 +153,7 @@ def set_cell(cell, text, bold=False):
 
 # ── funzione principale di generazione ────────────────────────────────────────
 
-def make_doc(filename, big_title, subtitle1, main_title, subtitle2, version, content_fn):
+def make_doc(filename, big_title, subtitle1, main_title, subtitle2, version, content_fn, dest=None):
     """
     Crea un nuovo documento clonando il frontespizio dall'originale
     e aggiungendo il contenuto tramite content_fn(doc, templates).
@@ -255,14 +256,14 @@ def make_doc(filename, big_title, subtitle1, main_title, subtitle2, version, con
     # Genera il contenuto
     content_fn(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark)
 
-    path = f"{OUT}\\{filename}"
+    path = f"{dest or OUT}\\{filename}"
     doc.save(path)
     print(f"✓ {filename}")
     return path
 
 # ── documento compatto (senza frontespizio) ───────────────────────────────────
 
-def make_compact_doc(filename, title, subtitle, content_fn):
+def make_compact_doc(filename, title, subtitle, content_fn, dest=None):
     """
     Crea un documento compatto senza frontespizio: solo un'intestazione
     breve e il contenuto. Ideale per guide rapide su 1-2 pagine.
@@ -350,7 +351,7 @@ def make_compact_doc(filename, title, subtitle, content_fn):
 
     content_fn(h1, h2, norm, blt, num, sug, warn, note, tbl_light)
 
-    path = f"{OUT}\\{filename}"
+    path = f"{dest or OUT}\\{filename}"
     doc.save(path)
     print(f"✓ {filename}")
     return path
@@ -637,6 +638,54 @@ def content_guida_magazzino(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# DOCUMENTO 5 — GUIDA RAPIDA COMANDE (compatta, 2 facciate)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def content_guida_comande(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
+
+    h1('1. Come funziona la schermata Comande')
+    norm('Ogni scontrino confermato alla cassa genera automaticamente una comanda. Il personale di cucina o banco gestisce le comande da questa pagina, senza accedere alla cassa.')
+    blt('Le comande appaiono in ordine di arrivo, dalla più vecchia alla più recente')
+    blt('Ogni card mostra: numero scontrino, tavolo (se impostato), prodotti, ora di arrivo')
+    blt('Gli ordini da asporto sono evidenziati in arancione')
+    note('Nota: La pagina si aggiorna automaticamente — non serve ricaricare il browser.')
+
+    h1('2. Gestire una comanda')
+    h2('Segnare come pronta')
+    num('Trova la comanda nella lista')
+    num('Premi il pulsante Pronta sulla card')
+    num('La card cambia aspetto: segnala che è pronta da servire')
+    h2('Segnare come servita / consegnata')
+    num('Premi Consegnata sulla card pronta')
+    num('La comanda scompare dalla lista attiva e viene archiviata')
+    sug('Suggerimento: Usa Pronta quando il prodotto è pronto al banco; usa Consegnata solo dopo averlo portato al tavolo o consegnato all\'asportante.')
+
+    h1('3. Ordini da asporto')
+    blt('Evidenziati in arancione con dicitura ASPORTO visibile sulla card')
+    blt('Seguono lo stesso flusso delle comande normali (Pronta → Consegnata)')
+    blt('Puoi filtrarli con il tasto Asporto nella barra filtri (vedi sezione 4)')
+
+    h1('4. Filtri')
+    tbl_light(
+        ['Filtro', 'Mostra'],
+        [
+            ['Tutti',      'Tutte le comande attive (in attesa + pronte)'],
+            ['In attesa',  'Solo le comande ancora da preparare'],
+            ['Pronte',     'Solo le comande pronte da servire'],
+            ['Asporto',    'Solo gli ordini con flag asporto attivo'],
+        ]
+    )
+    sug('Suggerimento: Nelle serate affollate usa In attesa per concentrarti su ciò che ancora non hai preparato.')
+
+    h1('5. Se una comanda non arriva')
+    norm('La comanda appare sulla pagina non appena la cassa conferma lo scontrino. Se non appare:')
+    blt('Verifica che lo scontrino sia stato confermato (non solo composto)')
+    blt('Ricarica la pagina manualmente')
+    blt('Controlla che il server (PocketBase) sia in esecuzione')
+    warn('Attenzione: Non chiudere la finestra del browser durante il servizio — la pagina perderebbe gli aggiornamenti automatici.')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # GENERA TUTTI I DOCUMENTI
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -654,14 +703,16 @@ make_compact_doc(
     'Guida_Rapida_Cassa.docx',
     'GUIDA RAPIDA — OPERAZIONI DI CASSA',
     'Cassa Dalila v1.4  ·  Oratorio Dalila',
-    content_guida_cassa
+    content_guida_cassa,
+    dest=GUIDE_OUT
 )
 
 make_compact_doc(
     'Guida_Rapida_Chiusura_Cassa.docx',
     'GUIDA RAPIDA — CHIUSURA CASSA',
     'Cassa Dalila v1.4  ·  Oratorio Dalila',
-    content_guida_chiusura
+    content_guida_chiusura,
+    dest=GUIDE_OUT
 )
 
 make_doc(
@@ -671,7 +722,16 @@ make_doc(
     'GUIDA RAPIDA',
     'Carico, rettifica e controllo scorte',
     'v1.4  |  2026',
-    content_guida_magazzino
+    content_guida_magazzino,
+    dest=GUIDE_OUT
+)
+
+make_compact_doc(
+    'Guida_Rapida_Comande.docx',
+    'GUIDA RAPIDA — GESTIONE COMANDE',
+    'Cassa Dalila v1.4  ·  Oratorio Dalila',
+    content_guida_comande,
+    dest=GUIDE_OUT
 )
 
 print('\nTutti i documenti generati.')
