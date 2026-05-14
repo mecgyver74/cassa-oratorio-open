@@ -578,12 +578,8 @@ def content_guida_magazzino(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
     num('Setup → Prodotti → seleziona prodotto → campo Magazzino comune → Salva')
     norm('Ogni vendita del prodotto scarica il magazzino comune, non la scorta singola.')
 
-    h1('4. Movimenti e allarmi scorte')
-    h2('Registro movimenti')
-    norm('La scheda Movimenti mostra la cronologia completa: tipo (vendita, carico, rettifica, storno), quantità variata, scorta risultante, nota.')
-    sug('Suggerimento: Filtra per prodotto per capire perché una scorta non torna.')
-    h2('Allarmi scorte basse')
-    norm('Configura la soglia in Setup → Prodotti → campo Soglia allarme. Quando la scorta scende sotto soglia, il prodotto appare evidenziato nella pagina Magazzino.')
+    h1('4. Allarmi scorte basse')
+    norm('Configura la soglia in Setup → Prodotti → campo Soglia allarme. Quando la scorta scende sotto soglia, il prodotto appare evidenziato nella pagina Magazzino e il bottone in cassa lampeggia con un alone rosso.')
 
 
 # ══════════════════════════════════════════════════════════════════════════════

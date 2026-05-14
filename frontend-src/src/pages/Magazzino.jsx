@@ -6,7 +6,6 @@ export default function Magazzino() {
   const toast = useToast()
   const [magComuni, setMagComuni] = useState([])
   const [prodotti, setProdotti] = useState([])
-  const [movimenti, setMovimenti] = useState([])
   const [tab, setTab] = useState('comuni')
   const [errore, setErrore] = useState(null)
   const [famiglie, setFamiglie] = useState([])
@@ -27,10 +26,6 @@ export default function Magazzino() {
       setFamiglie(fam)
       setProdotti(pr.filter(p => !p.magazzino_comune))
     } catch(e) { console.error('prodotti:', e) }
-    try {
-      const mv = await pb.collection('movimenti_magazzino').getFullList({ sort: '-created', expand: 'prodotto,magazzino_comune' })
-      setMovimenti(mv)
-    } catch(e) { console.error('movimenti:', e) }
     pb.autoCancellation(true)
   }, [])
 
@@ -130,7 +125,7 @@ export default function Magazzino() {
         </div>
       )}
       <div style={{ marginBottom: 16, display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-        {[['comuni','Magazzini comuni'], ['prodotti','Prodotti singoli'], ['movimenti','Movimenti']].map(([k,l]) => (
+        {[['comuni','Magazzini comuni'], ['prodotti','Prodotti singoli']].map(([k,l]) => (
           <button key={k} className={'prodotti-tab ' + (tab===k?'active':'')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -184,38 +179,6 @@ export default function Magazzino() {
         </>
       )}
 
-      {tab === 'movimenti' && (
-        <>
-          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>
-            <b>Registro variazioni magazzino.</b> Ogni vendita genera uno scarico automatico; i carichi manuali appaiono qui.
-          </div>
-          <div className="table-box">
-            <div className="table-box-head">Ultimi 100 movimenti</div>
-            <table>
-              <thead><tr><th>Data</th><th>Articolo</th><th>Tipo</th><th>Quantità</th><th>Note</th></tr></thead>
-              <tbody>
-                {movimenti.map(m => (
-                  <tr key={m.id}>
-                    <td>{new Date(m.created).toLocaleString('it-IT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</td>
-                    <td style={{ fontWeight: 600 }}>{m.expand?.prodotto?.nome || m.expand?.magazzino_comune?.nome || '—'}</td>
-                    <td>
-                      <span className={'badge ' + (m.tipo==='carico'?'badge-ok':m.tipo==='rettifica'?'':'badge-storno')}
-                        style={m.tipo==='rettifica' ? { background:'#eff6ff', color:'#2563eb' } : {}}>
-                        {m.tipo}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily:'Barlow Condensed', fontWeight:700, fontSize:15, color: m.tipo==='scarico'?'var(--red)':'var(--green)' }}>
-                      {m.tipo==='scarico'?'-':'+'}{m.quantita}
-                    </td>
-                    <td style={{ color:'var(--text2)' }}>{m.note||'—'}</td>
-                  </tr>
-                ))}
-                {movimenti.length===0 && <tr><td colSpan={5} style={{ color:'var(--text3)', textAlign:'center', padding:20 }}>Nessun movimento</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
     </div>
   )
 }
