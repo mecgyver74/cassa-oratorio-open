@@ -596,19 +596,15 @@ def content_guida_comande(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
     note('Nota: La pagina si aggiorna automaticamente — non serve ricaricare il browser.')
 
     h1('2. Gestire una comanda')
-    h2('Segnare come pronta')
     num('Trova la comanda nella lista')
-    num('Premi il pulsante Pronta sulla card')
-    num('La card cambia aspetto: segnala che è pronta da servire')
-    h2('Segnare come servita / consegnata')
-    num('Premi Consegnata sulla card pronta')
+    num('Man mano che i prodotti sono pronti, selezionali sulla card (spunta singola riga)')
+    num('Quando tutto è pronto, premi il pulsante Segna come evasa')
     num('La comanda scompare dalla lista attiva e viene archiviata')
-    sug('Suggerimento: Usa Pronta quando il prodotto è pronto al banco; usa Consegnata solo dopo averlo portato al tavolo o consegnato all\'asportante.')
+    sug('Suggerimento: Puoi spuntare i prodotti uno alla volta mentre li prepari, senza evasione immediata.')
 
     h1('3. Ordini da asporto')
     blt('Evidenziati in arancione con dicitura ASPORTO visibile sulla card')
-    blt('Seguono lo stesso flusso delle comande normali (Pronta → Consegnata)')
-    blt('Puoi filtrarli con il tasto Asporto nella barra filtri (vedi sezione 4)')
+    blt('Seguono lo stesso flusso delle comande normali: spunta prodotti → Segna come evasa')
 
     h1('4. Filtri, riepilogo e ordinamento')
     h2('Filtro per famiglia')
