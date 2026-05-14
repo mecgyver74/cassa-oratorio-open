@@ -222,7 +222,7 @@ I volontari hanno diritto a un buono consumazione per la serata. Per utilizzarlo
 1. Nel piede dello scontrino, trova la sezione **Buono Volontario**
 2. Seleziona il volontario dal menu a tendina
 3. Viene mostrato automaticamente il **saldo residuo** del buono per questa sessione
-4. Inserisci l'importo da scalare dal buono (non può superare il saldo disponibile né il totale dello scontrino)
+4. Il sistema scala automaticamente il buono fino al valore totale dello scontrino
 5. Il totale da pagare si aggiorna in tempo reale
 
 **Copertura totale:** Se il buono copre l'intero importo, il modale di pagamento mostra "Interamente coperto dal buono" e non richiede alcun metodo di pagamento aggiuntivo.
@@ -257,7 +257,6 @@ Il pulsante **Storico** mostra gli scontrini della giornata. Da qui puoi:
 - Rimuovere singole righe da uno scontrino
 - Modificare le quantità
 - Stornare completamente uno scontrino
-- Applicare uno sconto post-vendita
 - Ristampare uno scontrino con il pulsante **Ristampa**
 - Impostare o rimuovere l'omaggio su singole righe
 - **Modificare il tipo di pagamento** di uno scontrino già emesso *(nuovo)*
@@ -276,7 +275,7 @@ La pagina **Comande** è pensata per essere aperta su un tablet in cucina o al b
 |----------|-------------|
 | X in attesa | Numero di comande ancora da preparare |
 | X evase | Numero di comande già completate |
-| Tutte / Griglia / Bar... | Filtra per stazione specifica (puoi selezionarne più d'una) |
+| Tutte / [famiglia]... | Filtra per famiglia di prodotti |
 | Freccia su/giù | Inverte l'ordine di visualizzazione |
 | Riepilogo | Mostra i totali aggregati per prodotto |
 | Telefono (QR) | Genera un QR Code per aprire la cassa da un altro dispositivo |
@@ -300,13 +299,11 @@ Ogni riga di una comanda ha una checkbox per segnare i singoli prodotti come pro
 
 La pagina **Magazzino** permette di gestire le scorte dei prodotti. Ogni vendita scala automaticamente la giacenza.
 
-### Le tre schede
+### Le due schede
 
 **Magazzini comuni** — Stock condivisi tra più prodotti (es. panini usati da più tipi di hamburger).
 
 **Prodotti singoli** — Prodotti con scorta propria, non collegati a un magazzino comune.
-
-**Movimenti** — Registro di tutte le variazioni di scorta: scarichi automatici da vendite, carichi manuali e rettifiche.
 
 ### Operazioni disponibili
 
@@ -373,7 +370,7 @@ La chiusura cassa archivia la sessione corrente: tutti gli scontrini vengono col
 5. Al termine, il contatore scontrini riparte automaticamente da #0001
 
 **Alla chiusura vengono generati automaticamente nella cartella `chiusure/`:**
-- File **XLS** multi-foglio (Riepilogo, Venduto, Magazzino) — aperto nativamente da Excel
+- File **XLS** multi-foglio (Riepilogo, Venduto, Scontrini) — aperto nativamente da Excel
 - File **HTML** stampabile con le stesse informazioni
 
 Se hai configurato i destinatari in Setup → Notifiche, il report viene inviato via email con l'**allegato XLS** automaticamente alla chiusura.
