@@ -473,8 +473,7 @@ def content_guida_cassa(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 
     h1('3. Buono Volontario')
     num('Componi lo scontrino')
-    num('Sezione Buono Volontario: seleziona il volontario — il saldo residuo appare in tempo reale')
-    num('Inserisci l\'importo da scalare (massimo = saldo disponibile)')
+    num('Sezione Buono Volontario: seleziona il volontario — il sistema scala automaticamente fino al valore totale dello scontrino')
     num('Clicca PAGA')
     num('Se rimane un residuo: seleziona il metodo (Contanti · Carta · Satispay) → Conferma')
     note('Nota: Il saldo si azzera a ogni chiusura cassa — il volontario riparte sempre con il buono pieno.')
