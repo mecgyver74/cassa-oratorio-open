@@ -491,87 +491,51 @@ def content_guida_cassa(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DOCUMENTO 3 — GUIDA RAPIDA CHIUSURA CASSA
+# DOCUMENTO 3 — GUIDA RAPIDA CHIUSURA CASSA (compatta, 2 facciate)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def content_guida_chiusura(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark):
+def content_guida_chiusura(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 
-    h1('1. Quando chiudere la cassa')
-    norm('La chiusura cassa va eseguita a fine di ogni serata o evento. Archivia tutti gli scontrini della sessione e azzera il contatore (il prossimo scontrino ripartirà da #0001).')
-    blt('Eseguila sempre prima di spegnere il sistema a fine serata')
-    blt('Solo gli amministratori possono eseguirla')
-    blt('È irreversibile: una volta confermata non si può annullare')
-    note('Nota: Le sessioni archiviate rimangono consultabili in Statistiche → Sessioni archiviate. I dati non vengono mai cancellati.')
+    h1('1. Procedura di chiusura')
+    norm('Solo gli amministratori possono eseguirla. È irreversibile — i dati non vengono cancellati.')
+    num('Vai in Statistiche → pulsante 🔒 Chiudi cassa')
+    num('Si apre l\'anteprima con il riepilogo della sessione')
+    num('Verifica i totali (vedi sezione 2)')
+    num('Assegna un nome alla sessione (opzionale — di default usa la data)')
+    num('Clicca Chiudi cassa → Conferma')
+    num('Attendi il completamento; al termine appare il riepilogo finale')
+    warn('Attenzione: Prima di chiudere assicurati che nessun altro dispositivo abbia scontrini in corso.')
 
-    pgbrk()
-    h1('2. Procedura di chiusura')
-    num('Vai nella pagina Statistiche')
-    num('Premi il pulsante 🔒 Chiudi cassa (visibile solo agli amministratori)')
-    num('Si apre l\'anteprima con il riepilogo della sessione corrente')
-    num('Verifica i dati (vedi sezione successiva)')
-    num('Assegna un nome alla sessione se vuoi (opzionale — di default usa la data)')
-    num('Clicca Chiudi cassa →')
-    num('Conferma nella schermata di avviso')
-    num('Attendi il completamento dell\'archiviazione')
-    num('Al termine il sistema mostra il riepilogo finale')
-    warn('Attenzione: Assicurati che non ci siano scontrini in corso di compilazione su altri dispositivi prima di chiudere.')
-
-    pgbrk()
-    h1('3. Interpretare il riepilogo')
-    norm('L\'anteprima mostra un riepilogo completo della sessione:')
+    h1('2. Cosa verificare nel riepilogo')
     tbl_light(
-        ['Voce', 'Significato'],
+        ['Voce', 'Cosa fare'],
         [
-            ['Scontrini validi',       'Numero di scontrini emessi e non stornati'],
-            ['Incasso reale',          'Soldi fisicamente in cassa: Contanti + Carta + Satispay'],
-            ['Contanti',               'Totale incassato in contanti (da verificare col cassetto)'],
-            ['Carta',                  'Totale pagato con carta (da verificare col POS)'],
-            ['Satispay',               'Totale pagato con Satispay'],
-            ['Buoni (costo oratorio)', 'Valore dei buoni usati — NON sono soldi in cassa'],
-            ['Omaggi',                 'Valore degli articoli dati in omaggio'],
-            ['Stornati',               'Numero di scontrini annullati (mostrato in rosso)'],
+            ['Incasso reale (Contanti + Carta + Satispay)', 'Confronta contanti col cassetto, carta col giornaliero POS'],
+            ['Buoni (costo oratorio)',                      'Valore consumato dai volontari — non è denaro in cassa'],
+            ['Omaggi',                                     'Valore articoli dati gratis'],
+            ['Scontrini stornati',                         'Verificare se inattesi (mostrati in rosso)'],
         ]
     )
-    sug('Suggerimento: Prima di confermare, confronta il totale Contanti con il denaro nel cassetto e il totale Carta con il giornaliero del POS.')
+    sug('Suggerimento: Se i totali non tornano, controlla lo Storico prima di confermare.')
 
-    pgbrk()
-    h1('4. Il report via email')
-    norm('Se i destinatari sono configurati in Setup → Notifiche, alla chiusura viene inviata automaticamente un\'email con allegato Excel.')
-    tbl_light(
-        ['Foglio XLS', 'Contenuto'],
-        [
-            ['Riepilogo',  'Totali: incasso reale, buoni, scontrini, media, per metodo di pagamento'],
-            ['Venduto',    'Quantità e valore per ogni prodotto, con omaggi separati'],
-            ['Scontrini',  'Elenco completo di tutti gli scontrini della sessione'],
-        ]
-    )
-    norm('I file vengono salvati anche localmente nella cartella chiusure\\ con nome e data della sessione.')
-    sug('Suggerimento: Archivia i file XLS periodicamente su un disco esterno o Drive per avere uno storico completo delle serate.')
+    h1('3. Report XLS via email')
+    norm('Se configurata in Setup → Notifiche, l\'email arriva automaticamente con allegato Excel (3 fogli):')
+    blt('Riepilogo — incasso reale, buoni, scontrini, media, per metodo di pagamento')
+    blt('Venduto — quantità e valore per ogni prodotto, omaggi separati')
+    blt('Scontrini — elenco completo della sessione')
+    norm('I file vengono salvati anche localmente nella cartella chiusure\\.')
 
-    pgbrk()
-    h1('5. Dopo la chiusura')
-    norm('Dopo la chiusura la cassa è pronta per la sessione successiva:')
-    blt('Il contatore scontrini riparte da #0001')
-    blt('I saldi dei buoni volontari si azzerano (ogni volontario riparte con il buono pieno)')
-    blt('Le statistiche "Corrente" mostrano zero (sessione vuota)')
-    blt('Gli scontrini della sessione chiusa sono consultabili in Statistiche → Sessioni archiviate')
+    h1('4. Dopo la chiusura')
+    blt('Contatore scontrini azzera e riparte da #0001')
+    blt('Saldi buoni volontari azzerati — ogni volontario riparte con il buono pieno')
+    blt('Statistiche "Corrente" mostrano zero')
+    blt('Sessione chiusa consultabile in Statistiche → Sessioni archiviate → seleziona dal menu')
 
-    pgbrk()
-    h1('6. Consultare sessioni passate')
-    num('Vai in Statistiche')
-    num('Seleziona la scheda Sessioni archiviate')
-    num('Scegli la sessione dal menu a tendina')
-    num('Vengono mostrati tutti i dati della sessione: scontrini, incassi, dettaglio prodotti')
-    num('Puoi esportare in Excel anche le sessioni archiviate')
-
-    pgbrk()
-    h1('7. Backup dopo la chiusura')
-    norm('Si raccomanda di eseguire un backup dopo ogni chiusura cassa.')
-    num('Chiudi la pagina della cassa nel browser')
-    num('Fai doppio clic su BACKUP_DATI.bat nella cartella del programma')
-    num('Il backup viene salvato in backup\\ con data e ora nel nome del file')
-    num('Copia periodicamente la cartella backup\\ su un disco esterno')
-    warn('Attenzione: Non cancellare mai la cartella app\\pb_data\\. Contiene il database con tutti i dati.')
+    h1('5. Backup')
+    num('Chiudi il browser')
+    num('Doppio clic su BACKUP_DATI.bat nella cartella del programma')
+    num('Il file viene salvato in backup\\ con data e ora nel nome')
+    warn('Attenzione: Non cancellare mai la cartella app\\pb_data\\ — contiene tutto il database.')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -693,13 +657,10 @@ make_compact_doc(
     content_guida_cassa
 )
 
-make_doc(
+make_compact_doc(
     'Guida_Rapida_Chiusura_Cassa.docx',
-    'CASSA DALILA',
-    'Chiusura cassa',
-    'GUIDA RAPIDA',
-    'Procedura di chiusura a fine serata',
-    'v1.4  |  2026',
+    'GUIDA RAPIDA — CHIUSURA CASSA',
+    'Cassa Dalila v1.4  ·  Oratorio Dalila',
     content_guida_chiusura
 )
 
