@@ -8,7 +8,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 from docx import Document
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from docx.shared import RGBColor
+from docx.shared import RGBColor, Pt
 
 ORIG = r"C:\temp\manuale_orig.docx"
 OUT  = r"G:\.shortcut-targets-by-id\1MeKnNdaDF-U2crMSnvSXGJEJrMvsOIGF\Cassa_Dalila"
@@ -260,6 +260,102 @@ def make_doc(filename, big_title, subtitle1, main_title, subtitle2, version, con
     print(f"✓ {filename}")
     return path
 
+# ── documento compatto (senza frontespizio) ───────────────────────────────────
+
+def make_compact_doc(filename, title, subtitle, content_fn):
+    """
+    Crea un documento compatto senza frontespizio: solo un'intestazione
+    breve e il contenuto. Ideale per guide rapide su 1-2 pagine.
+    """
+    doc = Document(ORIG)
+    body = doc.element.body
+    for child in list(body):
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag in ('p', 'tbl', 'sdt'):
+            body.remove(child)
+
+    orig = Document(ORIG)
+    def find_orig(text_frag, style_id=None):
+        for p in orig.paragraphs:
+            if text_frag in p.text:
+                if style_id is None: return p
+                if get_style_id(p) == style_id: return p
+        return None
+
+    tmpl = {
+        'h1':      find_orig('1. Introduzione', 'Heading10'),
+        'h2':      find_orig('Installazione con installer', 'Heading20'),
+        'bullet':  find_orig('Gestire il magazzino', 'Paragrafoelenco'),
+        'num':     find_orig('Scarica e installa Node.js', 'Paragrafoelenco'),
+        'normal':  find_orig('Il sistema e completamente autonomo'),
+        'suggest': find_orig("Suggerimento: L'installer"),
+        'warn':    find_orig('Attenzione: Non chiudere'),
+        'note':    find_orig('Nota: Se il tablet'),
+        'table_light': orig.tables[0],
+    }
+
+    # Intestazione compatta
+    tp = doc.add_paragraph()
+    r1 = tp.add_run(title)
+    r1.bold = True; r1.font.size = Pt(18)
+    r1.font.color.rgb = RGBColor(0x1A, 0x52, 0x76)
+    set_spacing(tp, before=0, after=60)
+
+    if subtitle:
+        sp2 = doc.add_paragraph()
+        r2 = sp2.add_run(subtitle)
+        r2.font.size = Pt(10)
+        r2.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+        set_spacing(sp2, before=0, after=200)
+
+    # Helper con spaziatura ridotta
+    def h1(text):
+        p = add_h1(doc, tmpl['h1'], text)
+        set_spacing(p, before=160, after=60)
+        return p
+
+    def h2(text):
+        p = add_h2(doc, tmpl['h2'], text)
+        set_spacing(p, before=100, after=40)
+        return p
+
+    def norm(text, after=80):
+        return add_normal(doc, tmpl['normal'], text, after)
+
+    def blt(text):
+        p = add_bullet(doc, tmpl['bullet'], text)
+        set_spacing(p, before=20, after=20)
+        return p
+
+    def num(text):
+        p = add_numbered(doc, tmpl['num'], text)
+        set_spacing(p, before=20, after=20)
+        return p
+
+    def sug(text):  return add_quote(doc, tmpl['suggest'], text)
+    def warn(text): return add_quote(doc, tmpl['warn'], text)
+    def note(text): return add_quote(doc, tmpl['note'], text)
+
+    def tbl_light(header_row, data_rows):
+        t = add_table(doc, tmpl['table_light'])
+        if t is None: return
+        while len(t.rows) > 1:
+            t._tbl.remove(t.rows[-1]._tr)
+        for ci, h_text in enumerate(header_row[:len(t.columns)]):
+            set_cell(t.cell(0, ci), h_text, bold=True)
+        for row_data in data_rows:
+            row = t.add_row()
+            for ci, v in enumerate(row_data[:len(t.columns)]):
+                set_cell(row.cells[ci], v)
+
+    content_fn(h1, h2, norm, blt, num, sug, warn, note, tbl_light)
+
+    path = f"{OUT}\\{filename}"
+    doc.save(path)
+    print(f"✓ {filename}")
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # DOCUMENTO 1 — CHANGELOG
 # ══════════════════════════════════════════════════════════════════════════════
@@ -354,118 +450,44 @@ def content_changelog(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DOCUMENTO 2 — GUIDA RAPIDA CASSA
+# DOCUMENTO 2 — GUIDA RAPIDA CASSA (compatta, 2 facciate, senza frontespizio)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def content_guida_cassa(h1, h2, norm, blt, num, sug, warn, note, pgbrk, tbl_light, tbl_dark):
+def content_guida_cassa(h1, h2, norm, blt, num, sug, warn, note, tbl_light):
 
-    h1('1. Scontrino standard — Contanti o Carta')
-    num('Clicca sui prodotti per aggiungerli allo scontrino')
-    num('Usa + e − per modificare le quantità')
-    num('Clicca PAGA')
-    num('Seleziona Contanti oppure Carta')
-    num('Per contanti: inserisci l\'importo ricevuto (il sistema calcola il resto) oppure lascia vuoto per importo esatto')
+    h1('1. Scontrino base — Contanti · Carta · Satispay')
+    num('Aggiungi prodotti; usa + e − per le quantità')
+    num('Ingredienti personalizzati (se disponibili): clicca 🔧 sulla riga → deseleziona → Conferma')
+    num('Tavolo (opz.): piede scontrino → Tavolo → inserisci numero')
+    num('Asporto (opz.): attiva il toggle Asporto nel piede (diventa arancione)')
+    num('Clicca PAGA → scegli il metodo: Contanti · Carta · Satispay')
+    num('Contanti: inserisci importo ricevuto — il resto si calcola; lascia vuoto per importo esatto')
     num('Clicca Conferma')
-    sug('Suggerimento: Puoi anche digitare direttamente l\'importo ricevuto invece di usare i pulsanti banconote.')
 
-    pgbrk()
-    h1('2. Scontrino con Satispay')
-    num('Componi lo scontrino normalmente')
+    h1('2. Omaggio')
+    h2('Tutto lo scontrino')
+    num('Componi scontrino → PAGA → Omaggio → Conferma (totale = €0)')
+    h2('Singola riga (da Storico)')
+    num('Storico → seleziona scontrino → icona omaggio sulla riga interessata')
+
+    h1('3. Buono Volontario')
+    num('Componi lo scontrino')
+    num('Sezione Buono Volontario: seleziona il volontario — il saldo residuo appare in tempo reale')
+    num('Inserisci l\'importo da scalare (massimo = saldo disponibile)')
     num('Clicca PAGA')
-    num('Seleziona Satispay')
-    num('Clicca Conferma (l\'importo è già quello del totale)')
-    note('Nota: Il pagamento Satispay viene tracciato separatamente nelle statistiche e nel report di chiusura.')
+    num('Se rimane un residuo: seleziona il metodo (Contanti · Carta · Satispay) → Conferma')
+    note('Nota: Il saldo si azzera a ogni chiusura cassa — il volontario riparte sempre con il buono pieno.')
 
-    pgbrk()
-    h1('3. Scontrino con numero tavolo')
-    norm('Puoi assegnare un numero tavolo prima o dopo aver composto lo scontrino.')
-    h2('Prima del pagamento')
-    num('Componi lo scontrino')
-    num('Nel piede dello scontrino clicca il pulsante Tavolo')
-    num('Inserisci il numero e conferma')
-    num('Procedi normalmente con PAGA')
-    h2('Nel pannello di pagamento')
-    num('Clicca PAGA')
-    num('Inserisci o modifica il numero tavolo nel campo apposito nel pannello')
-    num('Seleziona il metodo e Conferma')
+    h1('4. Correggere uno scontrino già emesso')
+    blt('Rimuovere riga: Storico → scontrino → pulsante elimina sulla riga')
+    blt('Modificare quantità: Storico → scontrino → +/− sulla riga')
+    blt('Correggere metodo pagamento: Storico → scontrino → icona modifica sul tipo di pagamento')
+    warn('Attenzione: Le modifiche sono registrate e non eliminano i dati originali.')
 
-    pgbrk()
-    h1('4. Ordine da asporto')
-    num('Componi lo scontrino')
-    num('Attiva il toggle Asporto nel piede dello scontrino (si evidenzia in arancione)')
-    num('Lo scontrino viene marcato come asporto in stampa e nelle comande')
-    num('Procedi normalmente con PAGA')
-    sug('Suggerimento: Gli ordini da asporto appaiono con evidenziazione dedicata nella pagina Comande.')
-
-    pgbrk()
-    h1('5. Articolo in omaggio (totale o parziale)')
-    h2('Omaggio su tutto lo scontrino')
-    num('Componi lo scontrino')
-    num('Clicca PAGA')
-    num('Seleziona Omaggio')
-    num('Il totale diventa zero — clicca Conferma')
-    h2('Omaggio su singole righe (da Storico)')
-    num('Emetti lo scontrino normalmente')
-    num('Apri lo Storico')
-    num('Trova lo scontrino e clicca su di esso')
-    num('Clicca sull\'icona omaggio sulla riga del prodotto da omaggiare')
-    num('Il totale si aggiorna automaticamente')
-    note('Nota: Le operazioni sullo storico sono registrate e non cancellano i dati — creano un movimento di rettifica.')
-
-    pgbrk()
-    h1('6. Pagamento con Buono Volontario')
-    h2('Buono copre l\'intero importo')
-    num('Componi lo scontrino')
-    num('Nella sezione Buono Volontario seleziona il volontario')
-    num('Verifica il saldo residuo mostrato')
-    num('Inserisci l\'importo (uguale al totale dello scontrino)')
-    num('Il totale da pagare diventa zero — clicca PAGA')
-    num('Il pannello mostra "Interamente coperto dal buono" — clicca Conferma')
-    h2('Buono copre solo una parte')
-    num('Componi lo scontrino')
-    num('Nella sezione Buono Volontario seleziona il volontario')
-    num('Inserisci l\'importo da scalare dal buono (al massimo il saldo disponibile)')
-    num('Il totale residuo si aggiorna in tempo reale')
-    num('Clicca PAGA')
-    num('Seleziona il metodo per il residuo (Contanti, Carta o Satispay)')
-    num('Clicca Conferma')
-    sug('Suggerimento: Il saldo del buono si azzera a ogni chiusura cassa. Se il volontario non ha saldo sufficiente, il sistema non permette di inserire un importo superiore.')
-
-    pgbrk()
-    h1('7. Scontrino con personalizzazione ingredienti')
-    norm('Solo per i prodotti che hanno ingredienti configurati in Setup → Prodotti.')
-    num('Aggiungi il prodotto allo scontrino')
-    num('Clicca il pulsante 🔧 accanto al prodotto nello scontrino')
-    num('Nel popup, deseleziona gli ingredienti da escludere')
-    num('Conferma — la nota viene aggiunta alla riga')
-    num('Procedi normalmente con PAGA')
-
-    pgbrk()
-    h1('8. Correggere uno scontrino già emesso')
-    h2('Rimuovere una riga')
-    num('Apri lo Storico')
-    num('Trova lo scontrino e clicca su di esso')
-    num('Clicca il pulsante di eliminazione sulla riga da rimuovere')
-    h2('Modificare la quantità')
-    num('Apri lo Storico')
-    num('Trova lo scontrino')
-    num('Usa i pulsanti + e − sulla riga per modificare la quantità')
-    h2('Modificare il metodo di pagamento')
-    num('Apri lo Storico')
-    num('Trova lo scontrino')
-    num('Clicca l\'icona di modifica sul tipo di pagamento')
-    num('Seleziona il nuovo metodo e salva')
-    warn('Attenzione: Le modifiche allo storico sono registrate e non eliminano i dati originali.')
-
-    pgbrk()
-    h1('9. Stornare uno scontrino')
-    norm('Lo storno annulla completamente uno scontrino. Usalo solo se non è possibile correggere la singola riga.')
-    num('Apri lo Storico')
-    num('Trova lo scontrino da annullare')
-    num('Clicca il pulsante Storna')
-    num('Conferma l\'operazione')
-    norm('Lo scontrino appare come stornato nel riepilogo e non viene conteggiato nelle statistiche.')
-    sug('Suggerimento: Se hai fatto uno scontrino doppio, stornane uno. Se hai sbagliato un prodotto, rimuovi solo quella riga dallo storico invece di stornare tutto.')
+    h1('5. Stornare uno scontrino')
+    num('Storico → trova lo scontrino → pulsante Storna → Conferma')
+    norm('Lo scontrino viene marcato come stornato e non conta nelle statistiche.')
+    sug('Suggerimento: Preferisci correggere la singola riga dallo Storico invece di stornare tutto.')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -664,13 +686,10 @@ make_doc(
     content_changelog
 )
 
-make_doc(
+make_compact_doc(
     'Guida_Rapida_Cassa.docx',
-    'CASSA DALILA',
-    'Operazioni di cassa',
-    'GUIDA RAPIDA',
-    'Creazione scontrini — tutte le ipotesi operative',
-    'v1.4  |  2026',
+    'GUIDA RAPIDA — OPERAZIONI DI CASSA',
+    'Cassa Dalila v1.4  ·  Oratorio Dalila',
     content_guida_cassa
 )
 
