@@ -177,7 +177,8 @@ export default function Cassa({ utente }) {
   const getScortaDisplay = (p) => {
     if (p.expand?.magazzino_comune) {
       const mc = p.expand.magazzino_comune
-      return { qty: mc.quantita, low: mc.quantita <= mc.soglia_allarme, label: mc.nome, inf: false }
+      const inf = mc.quantita < 0
+      return { qty: mc.quantita, low: !inf && mc.quantita <= mc.soglia_allarme, label: mc.nome, inf }
     }
     const inf = p.quantita < 0
     return { qty: p.quantita, low: !inf && p.quantita <= p.soglia_allarme, label: null, inf }

@@ -29,7 +29,9 @@ export function useCassa() {
       const qtaCarrello = prev
         .filter(r => r._prodotto_id === prodotto.id)
         .reduce((s, r) => s + r.quantita, 0)
-      const scorta = prodotto.quantita
+      const scorta = prodotto.expand?.magazzino_comune
+        ? prodotto.expand.magazzino_comune.quantita
+        : prodotto.quantita
 
       // Verifica scorta (scorta -1 = infinita)
       if (scorta !== -1 && scorta !== undefined) {
